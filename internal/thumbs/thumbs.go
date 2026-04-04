@@ -16,11 +16,11 @@ import (
 )
 
 const (
-	ThumbnailWidth  = 256
-	ThumbnailHeight = 256
-	CacheDirName    = "thumbs"
-	MetadataFile    = "cache.json"
-	MaxConcurrency  = 4
+	ThumbnailSizeSmall  = 128  // For list view
+	ThumbnailSizeMedium = 256  // For detailed view
+	CacheDirName        = "thumbs"
+	MetadataFile        = "cache.json"
+	MaxConcurrency      = 4
 )
 
 // CacheEntry tracks metadata for a cached thumbnail
@@ -64,8 +64,13 @@ func NewCache() (*Cache, error) {
 	return c, nil
 }
 
-// Generate creates a thumbnail for an image
+// Generate creates a thumbnail for an image (default size: 256x256)
 func (c *Cache) Generate(imagePath string) (string, error) {
+	return c.GenerateWithSize(imagePath, ThumbnailSizeMedium)
+}
+
+// GenerateWithSize creates a thumbnail with specified size
+func (c *Cache) GenerateWithSize(imagePath string, size int) (string, error) {
 	// Check if valid image
 	if !isImageFile(imagePath) {
 		return "", fmt.Errorf("not an image file: %s", imagePath)
@@ -77,9 +82,9 @@ func (c *Cache) Generate(imagePath string) (string, error) {
 		return "", fmt.Errorf("stat image: %w", err)
 	}
 
-	// Generate cache key from path
-	cacheKey := generateCacheKey(imagePath)
-	thumbPath := filepath.Join(c.cacheDir, cacheKey+".jpg")
+	// Generate cache key from path and size
+	cacheKey := generateCacheKeyWithSize(imagePath, size)
+	thumbPath := filepath.Join(c.cacheDir, fmt.Sprintf("%s_%d.jpg", cacheKey, size))
 
 	// Check if thumbnail is up to date
 	c.mu.RLock()
@@ -91,8 +96,8 @@ func (c *Cache) Generate(imagePath string) (string, error) {
 		return thumbPath, nil
 	}
 
-	// Generate thumbnail
-	if err := c.createThumbnail(imagePath, thumbPath); err != nil {
+	// Generate thumbnail with specified size
+	if err := c.createThumbnailWithSize(imagePath, thumbPath, size); err != nil {
 		return "", fmt.Errorf("creating thumbnail: %w", err)
 	}
 
@@ -156,9 +161,15 @@ func (c *Cache) GenerateBatch(imagePaths []string, progress func(done, total int
 	return results, nil
 }
 
-// Get retrieves a thumbnail path if it exists and is current
+// Get retrieves a thumbnail path if it exists and is current (default 256x256)
 func (c *Cache) Get(imagePath string) (string, bool) {
-	cacheKey := generateCacheKey(imagePath)
+	return c.GetWithSize(imagePath, ThumbnailSizeMedium)
+}
+
+// GetWithSize retrieves a thumbnail of specific size
+func (c *Cache) GetWithSize(imagePath string, size int) (string, bool) {
+	cacheKey := generateCacheKeyWithSize(imagePath, size)
+	thumbPath := filepath.Join(c.cacheDir, fmt.Sprintf("%s_%d.jpg", cacheKey, size))
 	
 	c.mu.RLock()
 	entry, exists := c.entries[cacheKey]
@@ -179,15 +190,20 @@ func (c *Cache) Get(imagePath string) (string, bool) {
 	}
 
 	// Verify thumbnail file exists
-	if _, err := os.Stat(entry.ThumbnailPath); err != nil {
+	if _, err := os.Stat(thumbPath); err != nil {
 		return "", false
 	}
 
-	return entry.ThumbnailPath, true
+	return thumbPath, true
 }
 
 // createThumbnail generates a resized thumbnail
 func (c *Cache) createThumbnail(sourcePath, destPath string) error {
+	return c.createThumbnailWithSize(sourcePath, destPath, ThumbnailSizeMedium)
+}
+
+// createThumbnailWithSize generates a thumbnail with specified dimensions
+func (c *Cache) createThumbnailWithSize(sourcePath, destPath string, size int) error {
 	// Open source image
 	file, err := os.Open(sourcePath)
 	if err != nil {
@@ -202,7 +218,7 @@ func (c *Cache) createThumbnail(sourcePath, destPath string) error {
 	}
 
 	// Resize using Lanczos3 resampling (high quality)
-	resized := resize.Resize(ThumbnailWidth, ThumbnailHeight, img, resize.Lanczos3)
+	resized := resize.Resize(uint(size), uint(size), img, resize.Lanczos3)
 
 	// Create output file
 	out, err := os.Create(destPath)
@@ -218,6 +234,12 @@ func (c *Cache) createThumbnail(sourcePath, destPath string) error {
 // generateCacheKey creates a unique key for an image path
 func generateCacheKey(path string) string {
 	hash := sha256.Sum256([]byte(path))
+	return hex.EncodeToString(hash[:])[:16]
+}
+
+// generateCacheKeyWithSize creates a unique key including size
+func generateCacheKeyWithSize(path string, size int) string {
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%d", path, size)))
 	return hex.EncodeToString(hash[:])[:16]
 }
 

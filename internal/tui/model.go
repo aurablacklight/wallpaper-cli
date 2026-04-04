@@ -65,6 +65,9 @@ type Model struct {
 	cache        *thumbs.Cache
 	imageMethod  ImageMethod
 	showHelp     bool
+	searchMode   bool          // NEW: fuzzy search mode
+	searchQuery  string        // NEW: current search query
+	searcher     *FuzzySearcher // NEW: fuzzy searcher
 	err          error
 	msg          string
 	width        int
@@ -73,6 +76,7 @@ type Model struct {
 	// Pagination
 	paginator    *Paginator
 	allItems     []string
+	filteredItems []WallpaperItem // NEW: filtered results from search
 	
 	// macOS WallpaperEngine hint
 	showMacHint      bool
@@ -101,16 +105,22 @@ func NewModel(wallpapers []string, cfg *config.Config, setter platform.Setter) (
 
 	// Create list items for first batch only
 	items := make([]list.Item, len(firstBatch))
+	wallpaperItems := make([]WallpaperItem, len(firstBatch)) // For fuzzy searcher
 	for i, path := range firstBatch {
-		items[i] = createWallpaperItem(path, cache)
+		item := createWallpaperItem(path, cache)
+		items[i] = item
+		wallpaperItems[i] = item
 	}
 
-	// Setup list with 10 visible items (increased from default 5)
-	delegate := newItemDelegate(imageMethod, cache)
+	// Setup fuzzy searcher
+	searcher := NewFuzzySearcher(wallpaperItems)
+
+	// Setup list with 10 visible items using custom thumbnail delegate
+	delegate := NewThumbnailDelegate(imageMethod, cache)
 	l := list.New(items, delegate, 0, 0)
 	l.Title = fmt.Sprintf("Browse Wallpapers (%d/%d)", len(items), len(wallpapers))
 	l.SetShowStatusBar(true)
-	l.SetFilteringEnabled(false) // Fuzzy search deferred to Phase 03
+	l.SetFilteringEnabled(false) // We use custom fuzzy search
 	l.Styles.Title = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#FAFAFA")).
@@ -129,6 +139,8 @@ func NewModel(wallpapers []string, cfg *config.Config, setter platform.Setter) (
 		setter:      setter,
 		paginator:   paginator,
 		allItems:    wallpapers,
+		searcher:    searcher,
+		filteredItems: wallpaperItems,
 	}
 
 	// Check for macOS WallpaperEngine
@@ -170,12 +182,54 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list.SetSize(msg.Width, msg.Height-3) // Reserve space for status bar
 
 	case tea.KeyMsg:
+		// Handle search mode
+		if m.searchMode {
+			switch keypress := msg.String(); keypress {
+			case "esc":
+				// Exit search mode and clear search
+				m.searchMode = false
+				m.searchQuery = ""
+				m.filteredItems = m.searcher.Search("")
+				m.refreshListItems()
+				return m, nil
+			case "enter":
+				// Apply search and exit search mode
+				m.searchMode = false
+				m.filteredItems = m.searcher.Search(m.searchQuery)
+				m.refreshListItems()
+				return m, nil
+			case "backspace":
+				// Remove last character
+				if len(m.searchQuery) > 0 {
+					m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+					m.filteredItems = m.searcher.Search(m.searchQuery)
+					m.refreshListItems()
+				}
+				return m, nil
+			default:
+				// Add character to search query (if it's a printable character)
+				if len(keypress) == 1 && keypress[0] >= 32 && keypress[0] <= 126 {
+					m.searchQuery += keypress
+					m.filteredItems = m.searcher.Search(m.searchQuery)
+					m.refreshListItems()
+				}
+				return m, nil
+			}
+		}
+
+		// Normal mode key handling
 		switch keypress := msg.String(); keypress {
 		case "q", "esc":
 			return m, tea.Quit
 
 		case "?":
 			m.showHelp = !m.showHelp
+			return m, nil
+
+		case "/":
+			// Enter search mode
+			m.searchMode = true
+			m.searchQuery = ""
 			return m, nil
 
 		case "enter":
@@ -267,25 +321,35 @@ func (m *Model) renderStatusBar() string {
 
 	var parts []string
 
-	// Selection info
-	if m.list.SelectedItem() != nil {
-		selected := m.list.SelectedItem().(WallpaperItem)
-		parts = append(parts, fmt.Sprintf("📷 %s", selected.Name))
-	}
-
-	// Message or help hint
-	if m.msg != "" {
-		parts = append(parts, m.msg)
+	// Show search mode indicator
+	if m.searchMode {
+		searchStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7D56F4")).
+			Background(lipgloss.Color("#333333")).
+			Bold(true)
+		parts = append(parts, searchStyle.Render(fmt.Sprintf("Search: %s_", m.searchQuery)))
+		parts = append(parts, "ESC: cancel | Enter: apply")
 	} else {
-		parts = append(parts, "Enter: set | ?: help | q: quit")
-	}
+		// Selection info
+		if m.list.SelectedItem() != nil {
+			selected := m.list.SelectedItem().(WallpaperItem)
+			parts = append(parts, fmt.Sprintf("📷 %s", selected.Name))
+		}
 
-	// macOS hint
-	if m.showMacHint && !m.hintDismissed && m.wallpaperEngineInstalled {
-		hintStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFD700")).
-			Background(lipgloss.Color("#333333"))
-		parts = append(parts, hintStyle.Render("💡 o: WallpaperEngine | d: dismiss"))
+		// Message or help hint
+		if m.msg != "" {
+			parts = append(parts, m.msg)
+		} else {
+			parts = append(parts, "/: search | Enter: set | ?: help | q: quit")
+		}
+
+		// macOS hint
+		if m.showMacHint && !m.hintDismissed && m.wallpaperEngineInstalled {
+			hintStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#FFD700")).
+				Background(lipgloss.Color("#333333"))
+			parts = append(parts, hintStyle.Render("💡 o: WallpaperEngine | d: dismiss"))
+		}
 	}
 
 	return style.Render(strings.Join(parts, " | "))
@@ -304,10 +368,14 @@ Keyboard Shortcuts:
 
   ↑ / ↓          Navigate up/down
   Enter          Set selected wallpaper
+  /              Enter search mode
   n              Load next 10 wallpapers (at end of list)
   q / Esc        Quit
 
-  ?              Toggle this help
+Search Mode:
+  Type to filter  Real-time fuzzy search
+  Enter           Apply search
+  Esc             Cancel search
 
 macOS Integration:
   o              Open WallpaperEngine.app (if installed)
@@ -424,7 +492,36 @@ func (m *Model) loadNextBatch() tea.Cmd {
 		// Clear the "end of list" message
 		m.msg = ""
 
+		// Update fuzzy searcher with new items
+		allItems := make([]WallpaperItem, 0, len(m.list.Items()))
+		for _, item := range m.list.Items() {
+			if wallpaperItem, ok := item.(WallpaperItem); ok {
+				allItems = append(allItems, wallpaperItem)
+			}
+		}
+		m.searcher.UpdateItems(allItems)
+
 		return nil
+	}
+}
+
+// refreshListItems updates the list with filtered items from search
+func (m *Model) refreshListItems() {
+	// Convert filtered items to list items
+	items := make([]list.Item, len(m.filteredItems))
+	for i, item := range m.filteredItems {
+		items[i] = item
+	}
+
+	// Update the list
+	m.list.SetItems(items)
+
+	// Update title to show filtered count
+	if m.searchMode {
+		m.list.Title = fmt.Sprintf("Browse Wallpapers (%d matches)", len(m.filteredItems))
+	} else {
+		m.list.Title = fmt.Sprintf("Browse Wallpapers (%d/%d)", 
+			m.paginator.LoadedCount(), m.paginator.TotalCount())
 	}
 }
 
@@ -502,24 +599,6 @@ func methodName(method ImageMethod) string {
 	default:
 		return "None"
 	}
-}
-
-// newItemDelegate creates a custom list item delegate
-func newItemDelegate(method ImageMethod, cache *thumbs.Cache) list.DefaultDelegate {
-	delegate := list.NewDefaultDelegate()
-	
-	// Customize styles
-	delegate.Styles.NormalTitle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FAFAFA"))
-	delegate.Styles.NormalDesc = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#666666"))
-	delegate.Styles.SelectedTitle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#7D56F4")).
-		Bold(true)
-	delegate.Styles.SelectedDesc = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#7D56F4"))
-
-	return delegate
 }
 
 // Message types
