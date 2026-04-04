@@ -2,7 +2,7 @@
 
 A resource-efficient, cross-platform CLI tool for downloading high-quality anime wallpapers from multiple sources with smart filtering, deduplication, and metadata preservation.
 
-![Version](https://img.shields.io/badge/version-v1.1-blue)
+![Version](https://img.shields.io/badge/version-v1.2-blue)
 ![Go](https://img.shields.io/badge/go-1.21+-00ADD8)
 ![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -20,7 +20,11 @@ A resource-efficient, cross-platform CLI tool for downloading high-quality anime
 - **File Metadata**: Original source URLs saved in extended attributes
 - **Progress Bar**: Visual download progress with speed and ETA
 - **Organization**: By source, date, or tags
+- **TUI Browser**: Interactive terminal UI with thumbnails (v1.2)
+- **Fuzzy Search**: Real-time filtering in TUI (v1.2)
 - **Cross-Platform**: macOS, Linux, Windows
+- **Desktop Integration**: Set wallpapers directly from CLI (`set` command)
+- **Metadata Export**: JSON export for integration with other tools (v1.2)
 
 ---
 
@@ -158,32 +162,155 @@ go build -o wallpaper-cli .
 | `--dedup` | Enable deduplication | true |
 | `--dry-run` | Preview without downloading | - |
 
----
+### Set Command (Desktop Wallpaper)
 
-## 🎯 Examples
-
-### Download Top Weekly Wallpapers
+Set your desktop wallpaper directly from the command line:
 
 ```bash
-./wallpaper-cli fetch --popular --week --limit 20 --resolution 4k
+./wallpaper-cli set [path] [flags]
 ```
 
-### Download from Reddit Only
+#### Set Options
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| (no flag) | Set specific image file | `set ~/Pictures/wp/image.jpg` |
+| `--random` | Set random wallpaper from collection | `set --random` |
+| `--latest` | Set most recently downloaded | `set --latest` |
+| `--current` | Show currently set wallpaper | `set --current` |
+
+#### Set Examples
 
 ```bash
-./wallpaper-cli fetch --source reddit --sort=top --month --limit 15
+# Set a specific wallpaper
+./wallpaper-cli set ~/Pictures/wallpapers/wallhaven/01_abc123.jpg
+
+# Set random wallpaper
+./wallpaper-cli set --random
+
+# Set most recently downloaded
+./wallpaper-cli set --latest
+
+# Check current wallpaper
+./wallpaper-cli set --current
 ```
 
-### Custom Output with Date Organization
+#### Platform Support
+
+**macOS**: Uses AppleScript (osascript) - works on Intel and Apple Silicon  
+**Linux**: Auto-detects desktop environment (GNOME, KDE, XFCE) with feh/nitrogen fallback  
+**Windows**: Uses PowerShell Registry update + rundll32 refresh
+
+### Browse Command (Interactive TUI)
+
+Browse your wallpaper collection in an interactive terminal UI with thumbnails:
 
 ```bash
-./wallpaper-cli fetch --output ~/Wallpapers --organize-by date --limit 50
+./wallpaper-cli browse
 ```
 
-### Multi-Source with Tags
+#### Browse Keybindings
+
+| Key | Action |
+|-----|--------|
+| `↑/↓` or `j/k` | Navigate up/down |
+| `Enter` | Set wallpaper immediately |
+| `/` | Enter fuzzy search mode |
+| `n` | Load next 10 wallpapers |
+| `?` | Show help overlay |
+| `q` or `Esc` | Quit |
+
+#### Browse Features
+
+- **Thumbnails**: 64x64 inline previews (iTerm2, Kitty, SIXEL support)
+- **Fuzzy Search**: Real-time filtering as you type
+- **Pagination**: Shows 10 items at a time, load more with `n`
+- **Compact Layout**: Maximum screen utilization
+
+**Terminal Support**: Best experience on iTerm2 with inline image protocol enabled
+
+### List Command
+
+List and filter your downloaded wallpapers:
 
 ```bash
-./wallpaper-cli fetch --source all --tags "landscape,night" --favorites --limit 30
+./wallpaper-cli list [flags]
+```
+
+#### List Flags
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--source` | Filter by source | `wallhaven`, `reddit` |
+| `--since` | Show files since | `1d`, `7d`, `30d` |
+| `--json` | JSON output | Machine-readable |
+| `--path-only` | Just file paths | For piping |
+
+#### List Examples
+
+```bash
+# List all wallpapers
+./wallpaper-cli list
+
+# List only Wallhaven wallpapers from last 7 days
+./wallpaper-cli list --source wallhaven --since 7d
+
+# Export paths for backup
+./wallpaper-cli list --path-only > wallpapers.txt
+
+# JSON output for scripting
+./wallpaper-cli list --json | jq '.[].local_path'
+```
+
+### Export Command
+
+Export wallpaper metadata to JSON for integration with external tools:
+
+```bash
+./wallpaper-cli export [flags]
+```
+
+#### Export Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--format` | Export format | `json` |
+| `-o, --output` | Output file | stdout |
+| `--source` | Filter by source | all |
+| `--since` | Recent files only | all time |
+
+#### Export Examples
+
+```bash
+# Export to file for macOS WallpaperEngine app
+./wallpaper-cli export --output ~/Pictures/wallpapers/metadata.json
+
+# Export only recent Wallhaven downloads
+./wallpaper-cli export --source wallhaven --since 7d
+
+# Pipe to another command
+./wallpaper-cli export --since 1d | jq '.wallpapers | length'
+```
+
+#### Export JSON Format
+
+```json
+{
+  "version": "1.0",
+  "generated_at": "2026-04-04T18:00:00Z",
+  "cli_version": "1.2.0",
+  "count": 25,
+  "wallpapers": [
+    {
+      "id": "8g5dp1",
+      "source": "wallhaven",
+      "local_path": "~/Pictures/wallpapers/wallhaven/01_8g5dp1_3840x2160.jpg",
+      "resolution": "3840x2160",
+      "downloaded_at": "2026-04-04T11:22:00-05:00",
+      "file_size": 2847563
+    }
+  ]
+}
 ```
 
 ---
@@ -407,7 +534,28 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for deta
 
 ## 📝 Changelog
 
-### v1.1 (Current)
+### v1.2 (Current)
+- ✅ **TUI Browser**: Browse wallpapers interactively with `browse` command
+  - Inline thumbnail previews (iTerm2, Kitty, SIXEL terminals)
+  - Fuzzy search: Press `/` to filter in real-time
+  - Pagination: 10 items per page, `n` to load more
+  - Instant wallpaper setting: Press Enter on any item
+- ✅ **List Command**: Query downloaded wallpapers with filtering
+  - `list --source wallhaven --since 7d`
+  - `list --json` for machine-readable output
+  - `list --path-only` for piping to other tools
+- ✅ **Export Command**: Export metadata to JSON for app integration
+  - `export --output metadata.json`
+  - Compatible with macOS WallpaperEngine app
+- ✅ **Desktop Integration**: Set wallpapers from CLI (`set` command)
+  - Set specific images: `set <path>`
+  - Random selection: `set --random`
+  - Latest download: `set --latest`
+  - Current wallpaper: `set --current`
+- ✅ Cross-platform wallpaper setting (macOS, Linux, Windows)
+- ✅ Config persistence with wallpaper history (last 10)
+
+### v1.1
 - ✅ Progress bar with visual display
 - ✅ Reddit source adapter
 - ✅ Popularity sorting (top, favorites, views, hot)

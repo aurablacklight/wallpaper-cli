@@ -38,3 +38,29 @@ func ExpandPath(path string) (string, error) {
 
 	return path, nil
 }
+
+// ParseWallpaperFilename extracts metadata from wallpaper filename
+// Expected format: {index}_{id}_{resolution}.{ext}
+// Example: 01_8g5dp1_3840x2160.jpg
+func ParseWallpaperFilename(filename string) (id, resolution string) {
+	parts := SplitFilename(filename)
+	if len(parts) >= 3 {
+		return parts[1], parts[2]
+	}
+	return "", ""
+}
+
+// SplitFilename splits a filename by underscore, removing extension
+// Example: "01_8g5dp1_3840x2160.jpg" -> ["01", "8g5dp1", "3840x2160"]
+func SplitFilename(filename string) []string {
+	// Remove extension
+	for i := len(filename) - 1; i >= 0; i-- {
+		if filename[i] == '.' {
+			filename = filename[:i]
+			break
+		}
+	}
+
+	// Split by underscore
+	return strings.Split(filename, "_")
+}
