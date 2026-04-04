@@ -9,7 +9,7 @@
 
 - **Phase 01:** ✅ Complete — Cross-platform wallpaper setting implemented and tested
 - **Phase 02:** ✅ Complete — TUI with Bubble Tea implemented and **UAT passed**
-- **Next:** Phase 03 (Fuzzy Search) or Phase 04 (macOS App Integration)
+- **Phase 03:** ⭐ **TOP PRIORITY** — Terminal thumbnail integration + fuzzy search (context ready)
 
 ---
 
@@ -27,9 +27,11 @@
 - ✅ Enter sets wallpaper from TUI
 - ✅ 'q' quits the TUI
 
-### Known Limitations
-- ⏸️ Thumbnail rendering not implemented (text-only display)
-  - Future enhancement: Custom Bubble Tea delegate with image support
+### Deferred to Phase 3
+- ⏸️ **Thumbnail rendering** — Top priority for Phase 3
+  - Inline thumbnails in list (not separate view)
+  - Custom Bubble Tea delegate with image support
+  - Terminal protocol auto-detection (Kitty, iTerm2, SIXEL, ASCII)
 
 ---
 
@@ -46,18 +48,30 @@
 - Help overlay with any-key close
 - macOS WallpaperEngine hint
 
+### Phase 03 (⭐ Top Priority - Context Ready)
+- **T00: Terminal Thumbnail Integration** ⭐ TOP PRIORITY
+  - Inline thumbnails in TUI list
+  - 128x128 size, left of filename
+  - Auto-detect best terminal protocol
+  - Custom Bubble Tea item delegate
+- T01-T06: Fuzzy search integration
+  - `/` to search
+  - Real-time filtering
+  - Enter to set
+
 ---
 
 ## M002 Milestone Progress
 
-| Slice | Status | Description |
-|-------|--------|-------------|
-| S01 | ✅ Complete | Cross-platform wallpaper setting |
-| S02 | ✅ Complete + UAT | TUI with Bubble Tea |
-| S03 | 📋 Planned | Fuzzy search integration |
-| S04 | 📋 Planned | macOS app auto-discovery |
+| Slice | Status | Description | Priority |
+|-------|--------|-------------|----------|
+| S01 | ✅ Complete | Cross-platform wallpaper setting | - |
+| S02 | ✅ Complete + UAT | TUI with Bubble Tea | - |
+| S03 | ⭐ Ready | **Thumbnail integration + fuzzy search** | **TOP** |
+| S04 | 📋 Planned | macOS app auto-discovery | Normal |
 
-**Progress:** 2 of 4 slices complete (50%)
+**Progress:** 2 of 4 slices complete (50%)  
+**Next:** Phase 3 with thumbnail rendering as #1 priority
 
 ---
 
@@ -67,27 +81,31 @@
 |------|---------|
 | `cf63565` | feat(02): implement TUI with Bubble Tea |
 | `ad4ca26` | fix(tui): help close, pagination, 10 items per page |
-| *(next)* | docs(state): Phase 02 UAT passed |
+| `7e98e94` | docs(state): Phase 02 UAT passed |
+| `a2294b6` | docs(03): add thumbnail integration as TOP priority in Phase 3 |
 
 ---
 
 ## Next Steps
 
-**Option 1: Phase 03 — Fuzzy Search**
-Add fuzzy search with sahilm/fuzzy library
+### ⭐ Option 1: Phase 03 — Thumbnail Integration (TOP PRIORITY)
+**User explicitly requested after Phase 2 UAT**
+- Inline thumbnails in TUI list (not separate view)
+- Terminal auto-detection (Kitty, iTerm2, SIXEL, ASCII)
+- Plus fuzzy search integration
 ```
-/gsd-discuss-phase M002-S03
-```
-
-**Option 2: Phase 04 — macOS App Integration**
-Auto-discover CLI downloads in WallpaperEngine
-```
-/gsd-discuss-phase M002-S04
+/gsd-execute-phase M002-S03 /Users/derek/code_projects/wallpaper-cli-tool
 ```
 
-**Option 3: Documentation**
+### Option 2: Phase 04 — macOS App Integration
+Auto-discover CLI downloads in WallpaperEngine app
+```
+/gsd-discuss-phase M002-S04 /Users/derek/code_projects/wallpaper-cli-tool
+```
+
+### Option 3: Documentation
 Update README with browse command documentation
 
 ---
 
-*State maintained by gsd-tools*
+*State maintained by gencode*
