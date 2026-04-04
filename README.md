@@ -20,8 +20,11 @@ A resource-efficient, cross-platform CLI tool for downloading high-quality anime
 - **File Metadata**: Original source URLs saved in extended attributes
 - **Progress Bar**: Visual download progress with speed and ETA
 - **Organization**: By source, date, or tags
+- **TUI Browser**: Interactive terminal UI with thumbnails (v1.2)
+- **Fuzzy Search**: Real-time filtering in TUI (v1.2)
 - **Cross-Platform**: macOS, Linux, Windows
 - **Desktop Integration**: Set wallpapers directly from CLI (`set` command)
+- **Metadata Export**: JSON export for integration with other tools (v1.2)
 
 ---
 
@@ -197,6 +200,118 @@ Set your desktop wallpaper directly from the command line:
 **macOS**: Uses AppleScript (osascript) - works on Intel and Apple Silicon  
 **Linux**: Auto-detects desktop environment (GNOME, KDE, XFCE) with feh/nitrogen fallback  
 **Windows**: Uses PowerShell Registry update + rundll32 refresh
+
+### Browse Command (Interactive TUI)
+
+Browse your wallpaper collection in an interactive terminal UI with thumbnails:
+
+```bash
+./wallpaper-cli browse
+```
+
+#### Browse Keybindings
+
+| Key | Action |
+|-----|--------|
+| `↑/↓` or `j/k` | Navigate up/down |
+| `Enter` | Set wallpaper immediately |
+| `/` | Enter fuzzy search mode |
+| `n` | Load next 10 wallpapers |
+| `?` | Show help overlay |
+| `q` or `Esc` | Quit |
+
+#### Browse Features
+
+- **Thumbnails**: 64x64 inline previews (iTerm2, Kitty, SIXEL support)
+- **Fuzzy Search**: Real-time filtering as you type
+- **Pagination**: Shows 10 items at a time, load more with `n`
+- **Compact Layout**: Maximum screen utilization
+
+**Terminal Support**: Best experience on iTerm2 with inline image protocol enabled
+
+### List Command
+
+List and filter your downloaded wallpapers:
+
+```bash
+./wallpaper-cli list [flags]
+```
+
+#### List Flags
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--source` | Filter by source | `wallhaven`, `reddit` |
+| `--since` | Show files since | `1d`, `7d`, `30d` |
+| `--json` | JSON output | Machine-readable |
+| `--path-only` | Just file paths | For piping |
+
+#### List Examples
+
+```bash
+# List all wallpapers
+./wallpaper-cli list
+
+# List only Wallhaven wallpapers from last 7 days
+./wallpaper-cli list --source wallhaven --since 7d
+
+# Export paths for backup
+./wallpaper-cli list --path-only > wallpapers.txt
+
+# JSON output for scripting
+./wallpaper-cli list --json | jq '.[].local_path'
+```
+
+### Export Command
+
+Export wallpaper metadata to JSON for integration with external tools:
+
+```bash
+./wallpaper-cli export [flags]
+```
+
+#### Export Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--format` | Export format | `json` |
+| `-o, --output` | Output file | stdout |
+| `--source` | Filter by source | all |
+| `--since` | Recent files only | all time |
+
+#### Export Examples
+
+```bash
+# Export to file for macOS WallpaperEngine app
+./wallpaper-cli export --output ~/Pictures/wallpapers/metadata.json
+
+# Export only recent Wallhaven downloads
+./wallpaper-cli export --source wallhaven --since 7d
+
+# Pipe to another command
+./wallpaper-cli export --since 1d | jq '.wallpapers | length'
+```
+
+#### Export JSON Format
+
+```json
+{
+  "version": "1.0",
+  "generated_at": "2026-04-04T18:00:00Z",
+  "cli_version": "1.2.0",
+  "count": 25,
+  "wallpapers": [
+    {
+      "id": "8g5dp1",
+      "source": "wallhaven",
+      "local_path": "~/Pictures/wallpapers/wallhaven/01_8g5dp1_3840x2160.jpg",
+      "resolution": "3840x2160",
+      "downloaded_at": "2026-04-04T11:22:00-05:00",
+      "file_size": 2847563
+    }
+  ]
+}
+```
 
 ---
 
@@ -420,6 +535,18 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for deta
 ## 📝 Changelog
 
 ### v1.2 (Current)
+- ✅ **TUI Browser**: Browse wallpapers interactively with `browse` command
+  - Inline thumbnail previews (iTerm2, Kitty, SIXEL terminals)
+  - Fuzzy search: Press `/` to filter in real-time
+  - Pagination: 10 items per page, `n` to load more
+  - Instant wallpaper setting: Press Enter on any item
+- ✅ **List Command**: Query downloaded wallpapers with filtering
+  - `list --source wallhaven --since 7d`
+  - `list --json` for machine-readable output
+  - `list --path-only` for piping to other tools
+- ✅ **Export Command**: Export metadata to JSON for app integration
+  - `export --output metadata.json`
+  - Compatible with macOS WallpaperEngine app
 - ✅ **Desktop Integration**: Set wallpapers from CLI (`set` command)
   - Set specific images: `set <path>`
   - Random selection: `set --random`
