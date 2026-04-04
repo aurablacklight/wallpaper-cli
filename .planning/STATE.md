@@ -7,88 +7,80 @@
 
 ## Current Status
 
-- **Phase 01:** ✅ Complete — Cross-platform wallpaper setting implemented
-- **Phase 01 UAT:** ✅ Complete — Surgically tested, documented, signed off
-- **Next:** Phase 02 or manual testing on physical devices
+- **Phase 01:** ✅ Complete — Cross-platform wallpaper setting implemented and tested
+- **Phase 02:** ✅ Complete — TUI with Bubble Tea implemented
+- **Next:** Phase 03 (Fuzzy Search) or UAT/verification
 
 ---
 
-## Phase 01 Summary
+## Phase 02 Summary
 
 ### Implementation: ✅ Complete
-- Platform detection utility (3 OS, 4 Linux DEs)
-- macOS backend (AppleScript)
-- Linux backend (GNOME, KDE, XFCE + fallback)
-- Windows backend (PowerShell + Registry)
-- CLI `set` command with --random, --latest, --current
-- Config persistence (current + history)
-- Image discovery utilities
-- Comprehensive test suite
 
-### UAT: ✅ Passed (92%)
-- **Code Quality:** Excellent
-- **Test Coverage:** Good (gaps documented)
-- **Documentation:** Complete (README updated)
-- **Integration:** Working
+**New Packages:**
+- `internal/thumbs/` — Thumbnail generation and caching
+  - 256x256 JPEG thumbnails
+  - Concurrent generation (4 workers)
+  - SHA256-based cache keys
+  - Metadata persistence
 
-### Documentation: ✅ Complete
-- UAT document with 50+ test cases
-- 13 future test cases with code samples
-- README updated with set command docs
-- Version bumped to v1.2
+- `internal/tui/` — Bubble Tea TUI model
+  - List-based wallpaper browser
+  - Terminal image method detection (Kitty, iTerm2, SIXEL, half-blocks)
+  - Arrow key navigation
+  - Enter to set wallpaper
+  - Help overlay (?)
 
----
+**New Command:**
+- `wallpaper-cli browse` — Interactive TUI
+  - Shows thumbnails (when terminal supports)
+  - Navigate with ↑/↓
+  - Enter to set wallpaper immediately
+  - 'q' or Esc to quit
+  - '?' for help
 
-## Decisions Log
-
-| Date | Phase | Decision |
-|------|-------|----------|
-| 2026-04-04 | 01 | macOS: AppleScript first, native API enhancement later |
-| 2026-04-04 | 01 | Config: Store current wallpaper + history array |
-| 2026-04-04 | 01 | Errors: Fail fast with clear message, non-zero exit |
+**macOS Integration:**
+- Detects WallpaperEngine.app
+- Shows hint banner: "💡 o: WallpaperEngine | d: dismiss"
+- 'o' opens WallpaperEngine.app
+- 'd' dismisses hint
 
 ---
 
-## Implementation Status
+## Decisions Implemented
 
-| Plan | Status | Description |
-|------|--------|-------------|
-| 01-01 | ✅ Complete | Platform detection + macOS/Linux backends |
-| 01-02 | ✅ Complete | Windows backend + CLI set command |
-| 01-03 | ✅ Complete | Config persistence + comprehensive tests |
-| 01-UAT | ✅ Complete | UAT passed, gaps documented, README updated |
-
----
-
-## UAT Gaps Status
-
-| Gap | Status | Action |
-|-----|--------|--------|
-| D3.1.6 Symlink handling | 📋 | TC-01 created for future sprint |
-| D3.3.1 Flag precedence | ✅ | Documented in README |
-| D6.3.3 README update | ✅ | Fixed - set command added |
-| D6.3.4 Platform prereqs | ✅ | Fixed - documented in README |
+| Decision | Implementation |
+|----------|----------------|
+| High-quality images with terminal detection | `go-termimg` library integrated, method detection in TUI |
+| List view layout | Bubble Tea `list` component with virtual scrolling |
+| Arrow keys only | No fuzzy search (deferred to Phase 03) |
+| Include macOS hint | `checkWallpaperEngine()` + hint banner in status bar |
+| 256x256 thumbnails | `thumbs.Generate()` with Lanczos3 resampling |
+| Cache in ~/.cache/wallpaper-cli/thumbs/ | SHA256-based filenames + metadata.json |
 
 ---
 
-## Files Created/Modified
+## Files Created
 
-### Implementation
-- `internal/platform/*.go` (6 files, 400+ lines)
-- `cmd/set.go` (114 lines)
-- `internal/utils/image.go` (79 lines)
-- `internal/config/config.go` (extended)
+### Thumbnail Package
+- `internal/thumbs/thumbs.go` — Cache generation and management
 
-### Tests
-- `internal/platform/*_test.go`
-- `cmd/set_test.go`
-- `internal/utils/image_test.go`
+### TUI Package
+- `internal/tui/model.go` — Bubble Tea model, view, update logic
+- `internal/tui/` — Image method detection, help rendering, status bar
 
-### Documentation
-- `01-UAT.md` - Comprehensive testing (400+ lines)
-- `01-FUTURE-TESTS.md` - 13 test cases
-- `01-UAT-SUMMARY.md` - Sign-off document
-- `README.md` - Updated with v1.2 features
+### Commands
+- `cmd/browse.go` — Browse command implementation
+
+---
+
+## Dependencies Added
+
+- `github.com/charmbracelet/bubbletea` — TUI framework
+- `github.com/charmbracelet/bubbles` — List component
+- `github.com/charmbracelet/lipgloss` — Styling
+- `github.com/blacktop/go-termimg` — Terminal image rendering
+- `github.com/nfnt/resize` — Image resizing
 
 ---
 
@@ -96,32 +88,50 @@
 
 | Hash | Message |
 |------|---------|
-| `7df2030` | feat(01): implement cross-platform wallpaper setting |
-| `497e641` | docs(01): add phase summaries |
-| `a74f026` | docs(state): mark phase 01 complete |
-| `8f5694b` | docs(uat): comprehensive UAT for phase 01 + future test cases |
-| `985d623` | docs(readme): add set command documentation for v1.2 |
-| `78469bf` | docs(uat): UAT summary and sign-off |
+| `c690aa0` | docs(02): capture TUI context with Bubble Tea |
+| `cf63565` | feat(02): implement TUI with Bubble Tea - browse, thumbnails, macOS hint |
 
 ---
 
-## Blockers
+## Verification Status
 
-None
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Build | ✅ Passes | `go build -o wallpaper-cli .` |
+| browse command | ✅ Working | Help text displays |
+| Thumbnail cache | ⚠️ Not tested | Needs manual verification |
+| TUI rendering | ⚠️ Not tested | Needs interactive testing |
+| macOS hint | ⚠️ Not tested | Needs WallpaperEngine.app installed |
+| Image setting from TUI | ⚠️ Not tested | Needs interactive testing |
+
+**Note:** TUI requires interactive testing - automated tests limited for Bubble Tea.
 
 ---
 
 ## Next Steps
 
-### Immediate Options
-1. **Manual Testing** - Test on physical macOS/Linux/Windows devices
-2. **Phase 02** - Start TUI development (`/gsd-discuss-phase 02`)
-3. **Sprint 1** - Implement future test cases (TC-04, TC-09, TC-10)
+### Option 1: Interactive Testing
+Test the TUI manually:
+```bash
+./wallpaper-cli browse
+# Navigate with arrows
+# Press Enter to set wallpaper
+# Test '?' help, 'q' quit
+```
 
-### Recommended Path
-1. Complete manual testing on at least one platform
-2. Address any critical issues found
-3. Proceed to Phase 02 (TUI with Bubble Tea)
+### Option 2: Phase 03 — Fuzzy Search
+Add fuzzy search capability:
+```
+/gsd-discuss-phase M002-S03
+```
+
+### Option 3: UAT Phase 02
+Comprehensive testing of TUI:
+```
+Manual testing on macOS terminal
+Verify thumbnails generate
+Verify wallpaper setting works from TUI
+```
 
 ---
 
