@@ -6,12 +6,7 @@ class CLIWallpaperAdapter {
     
     func makeWallpaperItem(from record: CLIImageRecord) -> WallpaperItem {
         let ext = record.fileURL.pathExtension.lowercased()
-        let type: WallpaperType
-        switch ext {
-        case "mp4", "mov", "avi": type = .video
-        case "jpg", "jpeg", "png", "webp": type = .image
-        default: type = .image
-        }
+        let type: WallpaperType = ["mp4", "mov", "avi"].contains(ext) ? .video : .image
         
         return WallpaperItem(
             id: "cli-\(record.hash)",
