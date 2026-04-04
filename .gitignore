@@ -1,0 +1,48 @@
+# Binaries
+wallpaper-cli
+*.exe
+
+# Go build artifacts
+*.o
+*.a
+*.so
+dist/
+
+# Test artifacts
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+vendor/
+
+# Config (user-specific)
+config.json
+
+# Database
+*.db
+*.db-journal
+
+# Downloaded wallpapers (test data)
+test-wallpapers/
+test-downloads/
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# Go workspace
+go.work
+go.work.sum
