@@ -7,71 +7,54 @@
 
 ## Current Status
 
-- **Phase 01:** ✅ Complete — Cross-platform wallpaper setting implemented and tested
-- **Phase 02:** ✅ Complete — TUI with Bubble Tea implemented and **UAT passed**
-- **Phase 03:** ⭐ **TOP PRIORITY** — Terminal thumbnail integration + fuzzy search (context ready)
+- **Phase 01:** ✅ Complete — Cross-platform wallpaper setting
+- **Phase 02:** ✅ Complete — TUI with Bubble Tea (UAT passed)
+- **Phase 03:** ✅ **COMPLETE** — Thumbnail integration + fuzzy search
+- **Next:** Phase 04 (macOS App Integration) or full UAT
 
 ---
 
-## Phase 02 UAT Summary
+## Phase 03 Summary
 
-**Date:** 2026-04-04  
-**Status:** ✅ **PASSED**
+### Implementation: ✅ COMPLETE
 
-### Tested Features
-- ✅ Browse command launches successfully
-- ✅ Shows 10 items per page with pagination (X/25 format)
-- ✅ Help menu opens with '?' and closes with any key
-- ✅ 'n' key loads next 10 wallpapers
-- ✅ End-of-list message shows remaining count
-- ✅ Enter sets wallpaper from TUI
-- ✅ 'q' quits the TUI
+**Thumbnail Integration (TOP PRIORITY):**
+- ✅ Custom `ThumbnailDelegate` for inline thumbnail rendering
+- ✅ 128x128 thumbnails generated and cached
+- ✅ Terminal protocol support via `go-termimg`
+- ✅ Thumbnails render left of filename in list
+- ✅ Graceful fallback to placeholder on unsupported terminals
 
-### Deferred to Phase 3
-- ⏸️ **Thumbnail rendering** — Top priority for Phase 3
-  - Inline thumbnails in list (not separate view)
-  - Custom Bubble Tea delegate with image support
-  - Terminal protocol auto-detection (Kitty, iTerm2, SIXEL, ASCII)
+**Fuzzy Search:**
+- ✅ `sahilm/fuzzy` library integrated
+- ✅ Press `/` to enter search mode
+- ✅ Real-time filtering as you type
+- ✅ Press Enter to apply, ESC to cancel
+- ✅ Search matches filename, source, and path
 
----
-
-## Implementation Summary
-
-### Phase 01 (Complete)
-- `set` command with --random, --latest, --current
-- Cross-platform wallpaper setting (macOS, Linux, Windows)
-- Config persistence with history
-
-### Phase 02 (Complete + UAT Passed)
-- `browse` command with Bubble Tea TUI
-- Pagination: 10 items per page, 'n' to load more
-- Help overlay with any-key close
-- macOS WallpaperEngine hint
-
-### Phase 03 (⭐ Top Priority - Context Ready)
-- **T00: Terminal Thumbnail Integration** ⭐ TOP PRIORITY
-  - Inline thumbnails in TUI list
-  - 128x128 size, left of filename
-  - Auto-detect best terminal protocol
-  - Custom Bubble Tea item delegate
-- T01-T06: Fuzzy search integration
-  - `/` to search
-  - Real-time filtering
-  - Enter to set
+**Updated Keybindings:**
+- `/` — Enter search mode
+- Type to filter — Real-time fuzzy search
+- Enter (in search) — Apply search
+- ESC (in search) — Cancel search
+- `n` — Load next 10 wallpapers (pagination)
+- `?` — Help overlay
+- `q` — Quit
 
 ---
 
 ## M002 Milestone Progress
 
-| Slice | Status | Description | Priority |
-|-------|--------|-------------|----------|
-| S01 | ✅ Complete | Cross-platform wallpaper setting | - |
-| S02 | ✅ Complete + UAT | TUI with Bubble Tea | - |
-| S03 | ⭐ Ready | **Thumbnail integration + fuzzy search** | **TOP** |
-| S04 | 📋 Planned | macOS app auto-discovery | Normal |
+| Slice | Status | Description |
+|-------|--------|-------------|
+| S01 | ✅ Complete | Cross-platform wallpaper setting |
+| S02 | ✅ Complete | TUI with Bubble Tea |
+| S03 | ✅ **COMPLETE** | Thumbnail integration + fuzzy search |
+| S04 | 📋 Planned | macOS app auto-discovery |
 
-**Progress:** 2 of 4 slices complete (50%)  
-**Next:** Phase 3 with thumbnail rendering as #1 priority
+**Progress:** 3 of 4 slices complete (75%) 🎉
+
+**M002 almost complete!** Just Phase 04 (macOS app integration) remaining.
 
 ---
 
