@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	ThumbnailSizeSmall  = 128  // For list view
-	ThumbnailSizeMedium = 256  // For detailed view
-	CacheDirName        = "thumbs"
-	MetadataFile        = "cache.json"
-	MaxConcurrency      = 4
+	ThumbnailSizeCompact = 64   // For compact list view
+	ThumbnailSizeSmall   = 128  // For list view
+	ThumbnailSizeMedium  = 256  // For detailed view
+	CacheDirName         = "thumbs"
+	MetadataFile         = "cache.json"
+	MaxConcurrency       = 4
 )
 
 // CacheEntry tracks metadata for a cached thumbnail
