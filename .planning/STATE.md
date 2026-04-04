@@ -8,7 +8,34 @@
 ## Current Status
 
 - **Phase 01:** ✅ Complete — Cross-platform wallpaper setting implemented
-- **Next:** Phase 02 or UAT verification
+- **Phase 01 UAT:** ✅ Complete — Surgically tested, documented, signed off
+- **Next:** Phase 02 or manual testing on physical devices
+
+---
+
+## Phase 01 Summary
+
+### Implementation: ✅ Complete
+- Platform detection utility (3 OS, 4 Linux DEs)
+- macOS backend (AppleScript)
+- Linux backend (GNOME, KDE, XFCE + fallback)
+- Windows backend (PowerShell + Registry)
+- CLI `set` command with --random, --latest, --current
+- Config persistence (current + history)
+- Image discovery utilities
+- Comprehensive test suite
+
+### UAT: ✅ Passed (92%)
+- **Code Quality:** Excellent
+- **Test Coverage:** Good (gaps documented)
+- **Documentation:** Complete (README updated)
+- **Integration:** Working
+
+### Documentation: ✅ Complete
+- UAT document with 50+ test cases
+- 13 future test cases with code samples
+- README updated with set command docs
+- Version bumped to v1.2
 
 ---
 
@@ -29,32 +56,52 @@
 | 01-01 | ✅ Complete | Platform detection + macOS/Linux backends |
 | 01-02 | ✅ Complete | Windows backend + CLI set command |
 | 01-03 | ✅ Complete | Config persistence + comprehensive tests |
+| 01-UAT | ✅ Complete | UAT passed, gaps documented, README updated |
+
+---
+
+## UAT Gaps Status
+
+| Gap | Status | Action |
+|-----|--------|--------|
+| D3.1.6 Symlink handling | 📋 | TC-01 created for future sprint |
+| D3.3.1 Flag precedence | ✅ | Documented in README |
+| D6.3.3 README update | ✅ | Fixed - set command added |
+| D6.3.4 Platform prereqs | ✅ | Fixed - documented in README |
 
 ---
 
 ## Files Created/Modified
 
-### New Files
-- `internal/platform/platform.go` — Platform interface
-- `internal/platform/detect.go` — OS and DE detection
-- `internal/platform/macos.go` — macOS AppleScript backend
-- `internal/platform/linux.go` — Linux GNOME/KDE/XFCE backends
-- `internal/platform/windows.go` — Windows PowerShell backend
-- `internal/platform/platform_test.go` — Platform tests
-- `internal/utils/image.go` — Image discovery utilities
-- `cmd/set.go` — CLI set command
-- `cmd/set_test.go` — Set command tests
+### Implementation
+- `internal/platform/*.go` (6 files, 400+ lines)
+- `cmd/set.go` (114 lines)
+- `internal/utils/image.go` (79 lines)
+- `internal/config/config.go` (extended)
 
-### Modified Files
-- `internal/config/config.go` — Extended with wallpaper persistence
+### Tests
+- `internal/platform/*_test.go`
+- `cmd/set_test.go`
+- `internal/utils/image_test.go`
+
+### Documentation
+- `01-UAT.md` - Comprehensive testing (400+ lines)
+- `01-FUTURE-TESTS.md` - 13 test cases
+- `01-UAT-SUMMARY.md` - Sign-off document
+- `README.md` - Updated with v1.2 features
 
 ---
 
-## Session History
+## Commits Since Last State
 
-**2026-04-04:** Phase 01 context gathered via discuss-phase workflow
-**2026-04-04:** Phase 01 planned (3 plans, 10 tasks)
-**2026-04-04:** Phase 01 executed in YOLO mode — all 3 waves complete
+| Hash | Message |
+|------|---------|
+| `7df2030` | feat(01): implement cross-platform wallpaper setting |
+| `497e641` | docs(01): add phase summaries |
+| `a74f026` | docs(state): mark phase 01 complete |
+| `8f5694b` | docs(uat): comprehensive UAT for phase 01 + future test cases |
+| `985d623` | docs(readme): add set command documentation for v1.2 |
+| `78469bf` | docs(uat): UAT summary and sign-off |
 
 ---
 
@@ -66,9 +113,15 @@ None
 
 ## Next Steps
 
-1. **Verify implementation** — Manual testing on target platforms
-2. **UAT** — Run user acceptance tests per 01-VALIDATION.md
-3. **Phase 02** — TUI with Bubble Tea (when ready)
+### Immediate Options
+1. **Manual Testing** - Test on physical macOS/Linux/Windows devices
+2. **Phase 02** - Start TUI development (`/gsd-discuss-phase 02`)
+3. **Sprint 1** - Implement future test cases (TC-04, TC-09, TC-10)
+
+### Recommended Path
+1. Complete manual testing on at least one platform
+2. Address any critical issues found
+3. Proceed to Phase 02 (TUI with Bubble Tea)
 
 ---
 
