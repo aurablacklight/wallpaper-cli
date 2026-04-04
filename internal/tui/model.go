@@ -70,6 +70,10 @@ type Model struct {
 	width        int
 	height       int
 	
+	// Pagination
+	paginator    *Paginator
+	allItems     []string
+	
 	// macOS WallpaperEngine hint
 	showMacHint      bool
 	wallpaperEngineInstalled bool
@@ -91,16 +95,20 @@ func NewModel(wallpapers []string, cfg *config.Config, setter platform.Setter) (
 	// Detect image rendering method
 	imageMethod := detectImageMethod()
 
-	// Create list items
-	items := make([]list.Item, len(wallpapers))
-	for i, path := range wallpapers {
+	// Setup pagination - load first 10 items
+	paginator := NewPaginator(wallpapers)
+	firstBatch := paginator.GetNextBatch()
+
+	// Create list items for first batch only
+	items := make([]list.Item, len(firstBatch))
+	for i, path := range firstBatch {
 		items[i] = createWallpaperItem(path, cache)
 	}
 
-	// Setup list
+	// Setup list with 10 visible items (increased from default 5)
 	delegate := newItemDelegate(imageMethod, cache)
 	l := list.New(items, delegate, 0, 0)
-	l.Title = "Browse Wallpapers"
+	l.Title = fmt.Sprintf("Browse Wallpapers (%d/%d)", len(items), len(wallpapers))
 	l.SetShowStatusBar(true)
 	l.SetFilteringEnabled(false) // Fuzzy search deferred to Phase 03
 	l.Styles.Title = lipgloss.NewStyle().
@@ -119,6 +127,8 @@ func NewModel(wallpapers []string, cfg *config.Config, setter platform.Setter) (
 		imageMethod: imageMethod,
 		cfg:         cfg,
 		setter:      setter,
+		paginator:   paginator,
+		allItems:    wallpapers,
 	}
 
 	// Check for macOS WallpaperEngine
@@ -137,10 +147,26 @@ func (m *Model) Init() tea.Cmd {
 
 // Update handles messages
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Handle help overlay first - any key closes it except when showing help
+	if m.showHelp {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			// Any key closes help overlay
+			switch keyMsg.String() {
+			case "q", "esc":
+				m.showHelp = false
+				return m, nil
+			default:
+				m.showHelp = false
+				return m, nil
+			}
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Show 10 items by default (increased from Bubble Tea's default 5)
 		m.list.SetSize(msg.Width, msg.Height-3) // Reserve space for status bar
 
 	case tea.KeyMsg:
@@ -164,6 +190,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showMacHint {
 				m.hintDismissed = true
 				return m, nil
+			}
+
+		case "n":
+			// Load next batch of wallpapers
+			if m.paginator != nil && m.paginator.HasMore() {
+				return m, m.loadNextBatch()
+			}
+		}
+
+		// Check if user scrolled to the end of visible items
+		if msg.String() == "down" || msg.String() == "j" {
+			if m.paginator != nil && m.paginator.IsAtEnd(m.list.Index()) {
+				m.msg = m.paginator.GetEndMessage()
 			}
 		}
 
@@ -265,6 +304,7 @@ Keyboard Shortcuts:
 
   ↑ / ↓          Navigate up/down
   Enter          Set selected wallpaper
+  n              Load next 10 wallpapers (at end of list)
   q / Esc        Quit
 
   ?              Toggle this help
@@ -276,7 +316,7 @@ macOS Integration:
 Image Rendering:
   Current method: ` + methodName(m.imageMethod) + `
 
-Press any key to close help...
+Press any key (except q/Esc) to close help...
 `
 
 	return helpStyle.Render(help)
@@ -353,6 +393,38 @@ func (m *Model) checkWallpaperEngine() {
 	if _, err := os.Stat(appPath); err == nil {
 		m.wallpaperEngineInstalled = true
 		m.showMacHint = true
+	}
+}
+
+// loadNextBatch loads the next batch of wallpapers for pagination
+func (m *Model) loadNextBatch() tea.Cmd {
+	return func() tea.Msg {
+		if m.paginator == nil || !m.paginator.HasMore() {
+			return nil
+		}
+
+		// Get next batch
+		batch := m.paginator.GetNextBatch()
+		
+		// Create items for new batch
+		newItems := make([]list.Item, len(batch))
+		for i, path := range batch {
+			newItems[i] = createWallpaperItem(path, m.cache)
+		}
+
+		// Update list title
+		m.list.Title = fmt.Sprintf("Browse Wallpapers (%d/%d)", 
+			m.paginator.LoadedCount(), m.paginator.TotalCount())
+
+		// Insert new items into list
+		for _, item := range newItems {
+			m.list.InsertItem(len(m.list.Items()), item)
+		}
+
+		// Clear the "end of list" message
+		m.msg = ""
+
+		return nil
 	}
 }
 
