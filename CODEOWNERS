@@ -1,0 +1,29 @@
+# Code Owners
+# Define who must review changes to different parts of the codebase
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owner (applies to entire repo unless overridden)
+* @aurablacklight
+
+# Core CLI commands
+/cmd/ @aurablacklight
+
+# Source adapters (critical integrations)
+/internal/sources/ @aurablacklight
+
+# Download manager and deduplication
+/internal/download/ @aurablacklight
+/internal/dedup/ @aurablacklight
+
+# Database and config
+/internal/data/ @aurablacklight
+/internal/config/ @aurablacklight
+
+# Documentation
+/README.md @aurablacklight
+/ROADMAP.md @aurablacklight
+
+# Build and CI
+/Makefile @aurablacklight
+go.mod @aurablacklight
+go.sum @aurablacklight
