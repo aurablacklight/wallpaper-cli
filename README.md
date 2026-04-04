@@ -5,6 +5,9 @@ A resource-efficient, cross-platform CLI tool for downloading high-quality anime
 ![Version](https://img.shields.io/badge/version-v1.1-blue)
 ![Go](https://img.shields.io/badge/go-1.21+-00ADD8)
 ![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+**GitHub:** https://github.com/aurablacklight/wallpaper-cli
 
 ---
 
@@ -25,6 +28,8 @@ A resource-efficient, cross-platform CLI tool for downloading high-quality anime
 
 ### Download Pre-built Binary
 
+Download from [GitHub Releases](https://github.com/aurablacklight/wallpaper-cli/releases):
+
 ```bash
 # macOS (Apple Silicon)
 ./wallpaper-cli-darwin-arm64 --version
@@ -42,7 +47,7 @@ A resource-efficient, cross-platform CLI tool for downloading high-quality anime
 ### Build from Source
 
 ```bash
-git clone https://github.com/user/wallpaper-cli
+git clone https://github.com/aurablacklight/wallpaper-cli.git
 cd wallpaper-cli
 go build -o wallpaper-cli .
 ```
@@ -325,13 +330,78 @@ make test
 
 ---
 
+## 🏗️ Project Structure
+
+```
+wallpaper-cli/
+├── cmd/                      # CLI commands (cobra)
+│   ├── root.go              # Root command & config
+│   ├── fetch.go             # Main fetch command
+│   ├── config.go            # Config management
+│   └── ...
+├── internal/
+│   ├── sources/             # Source adapters
+│   │   ├── wallhaven/      # Wallhaven.cc API
+│   │   └── reddit/         # Reddit API
+│   ├── download/           # Download manager & progress bar
+│   ├── dedup/              # pHash deduplication
+│   ├── data/               # SQLite database
+│   ├── utils/              # Path & metadata utilities
+│   └── validate/           # Input validation
+├── .github/                # GitHub templates & workflows
+│   ├── ISSUE_TEMPLATE/    # Bug reports & features
+│   └── pull_request_template.md
+├── CODEOWNERS             # Code ownership rules
+├── CONTRIBUTING.md        # Contribution guidelines
+└── README.md              # This file
+```
+
+---
+
+## 🔒 Repository Protection
+
+This repository uses GitHub's branch protection rules:
+
+- **Pull Request Required:** All changes must go through PR
+- **Code Owner Review:** @aurablacklight must approve all changes
+- **Linear History:** No merge commits (rebase or squash only)
+- **Conversation Resolution:** All review comments must be resolved
+- **Admin Enforcement:** Rules apply to everyone including admins
+
+See [CODEOWNERS](CODEOWNERS) and [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+---
+
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+### Quick Steps
+
+1. **Fork** the repository
+2. **Create a branch** from `master`:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+3. **Make your changes** following our [code standards](CONTRIBUTING.md)
+4. **Commit** with clear messages:
+   ```bash
+   git commit -m "feat: add new sorting option --most-downloaded"
+   ```
+5. **Push** to your fork:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+6. **Open a Pull Request** against `master`
+   - PR template will auto-populate
+   - @aurablacklight will review
+   - Address any review comments
+
+### Resources
+
+- [CODEOWNERS](CODEOWNERS) - Who must review changes
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Full contribution guidelines
+- [Issue Templates](.github/ISSUE_TEMPLATE/) - Bug reports & feature requests
 
 ---
 
@@ -372,8 +442,16 @@ MIT License - see LICENSE file for details
 
 ---
 
-## 📬 Contact
+## 📬 Contact & Support
 
-For issues, feature requests, or contributions, please open a GitHub issue.
+- **Issues:** [GitHub Issues](https://github.com/aurablacklight/wallpaper-cli/issues)
+- **Discussions:** Use GitHub Discussions for questions
+- **Security:** Report vulnerabilities privately to the maintainer
 
 **Enjoy your wallpapers!** 🎨✨
+
+---
+
+## ⭐ Star History
+
+If you find this tool useful, please consider starring the repo on [GitHub](https://github.com/aurablacklight/wallpaper-cli)!
