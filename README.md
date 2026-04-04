@@ -2,7 +2,7 @@
 
 A resource-efficient, cross-platform CLI tool for downloading high-quality anime wallpapers from multiple sources with smart filtering, deduplication, and metadata preservation.
 
-![Version](https://img.shields.io/badge/version-v1.1-blue)
+![Version](https://img.shields.io/badge/version-v1.2-blue)
 ![Go](https://img.shields.io/badge/go-1.21+-00ADD8)
 ![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -21,6 +21,7 @@ A resource-efficient, cross-platform CLI tool for downloading high-quality anime
 - **Progress Bar**: Visual download progress with speed and ETA
 - **Organization**: By source, date, or tags
 - **Cross-Platform**: macOS, Linux, Windows
+- **Desktop Integration**: Set wallpapers directly from CLI (`set` command)
 
 ---
 
@@ -158,33 +159,44 @@ go build -o wallpaper-cli .
 | `--dedup` | Enable deduplication | true |
 | `--dry-run` | Preview without downloading | - |
 
----
+### Set Command (Desktop Wallpaper)
 
-## 🎯 Examples
-
-### Download Top Weekly Wallpapers
+Set your desktop wallpaper directly from the command line:
 
 ```bash
-./wallpaper-cli fetch --popular --week --limit 20 --resolution 4k
+./wallpaper-cli set [path] [flags]
 ```
 
-### Download from Reddit Only
+#### Set Options
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| (no flag) | Set specific image file | `set ~/Pictures/wp/image.jpg` |
+| `--random` | Set random wallpaper from collection | `set --random` |
+| `--latest` | Set most recently downloaded | `set --latest` |
+| `--current` | Show currently set wallpaper | `set --current` |
+
+#### Set Examples
 
 ```bash
-./wallpaper-cli fetch --source reddit --sort=top --month --limit 15
+# Set a specific wallpaper
+./wallpaper-cli set ~/Pictures/wallpapers/wallhaven/01_abc123.jpg
+
+# Set random wallpaper
+./wallpaper-cli set --random
+
+# Set most recently downloaded
+./wallpaper-cli set --latest
+
+# Check current wallpaper
+./wallpaper-cli set --current
 ```
 
-### Custom Output with Date Organization
+#### Platform Support
 
-```bash
-./wallpaper-cli fetch --output ~/Wallpapers --organize-by date --limit 50
-```
-
-### Multi-Source with Tags
-
-```bash
-./wallpaper-cli fetch --source all --tags "landscape,night" --favorites --limit 30
-```
+**macOS**: Uses AppleScript (osascript) - works on Intel and Apple Silicon  
+**Linux**: Auto-detects desktop environment (GNOME, KDE, XFCE) with feh/nitrogen fallback  
+**Windows**: Uses PowerShell Registry update + rundll32 refresh
 
 ---
 
@@ -407,7 +419,16 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for deta
 
 ## 📝 Changelog
 
-### v1.1 (Current)
+### v1.2 (Current)
+- ✅ **Desktop Integration**: Set wallpapers from CLI (`set` command)
+  - Set specific images: `set <path>`
+  - Random selection: `set --random`
+  - Latest download: `set --latest`
+  - Current wallpaper: `set --current`
+- ✅ Cross-platform wallpaper setting (macOS, Linux, Windows)
+- ✅ Config persistence with wallpaper history (last 10)
+
+### v1.1
 - ✅ Progress bar with visual display
 - ✅ Reddit source adapter
 - ✅ Popularity sorting (top, favorites, views, hot)
