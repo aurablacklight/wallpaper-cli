@@ -50,11 +50,11 @@
 | S01 | ✅ Complete | Cross-platform wallpaper setting |
 | S02 | ✅ Complete | TUI with Bubble Tea |
 | S03 | ✅ **COMPLETE** | Thumbnail integration + fuzzy search |
-| S04 | 📋 Planned | macOS app auto-discovery |
+| S04 | 📝 Revised | macOS app auto-discovery — see [S04 boundary analysis](./milestones/M002/slices/S04/S04-REPOSITORY-BOUNDARY-ANALYSIS.md) |
 
 **Progress:** 3 of 4 slices complete (75%) 🎉
 
-**M002 almost complete!** Just Phase 04 (macOS app integration) remaining.
+**M002 almost complete!** Just Phase 04 (macOS app integration) remaining — see [S04 boundary analysis](./milestones/M002/slices/S04/S04-REPOSITORY-BOUNDARY-ANALYSIS.md) for details on what can be done in-repo vs. externally.
 
 ---
 
