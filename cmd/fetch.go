@@ -355,6 +355,9 @@ func buildSourceConfig(cfg *config.Config, name string) map[string]string {
 		if sc.Cookies != "" {
 			m["cookies"] = sc.Cookies
 		}
+		if sc.CookiesFile != "" {
+			m["cookies_file"] = sc.CookiesFile
+		}
 		if len(sc.Subreddits) > 0 {
 			m["subreddits"] = strings.Join(sc.Subreddits, ",")
 		}

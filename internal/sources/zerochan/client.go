@@ -152,9 +152,9 @@ func (c *Client) doSearch(ctx context.Context, rawURL string) ([]ListEntry, erro
 		}
 	}
 
-	// 503 = JS anti-bot challenge
+	// 503 = JS anti-bot challenge with TLS fingerprinting — cannot be bypassed from CLI
 	if resp.StatusCode == http.StatusServiceUnavailable {
-		return nil, fmt.Errorf("zerochan returned 503 (anti-bot challenge) — set session cookies in config (from browser login) to bypass")
+		return nil, fmt.Errorf("zerochan returned 503 (anti-bot + TLS fingerprint) — this source requires a browser engine; use the GUI app for Zerochan")
 	}
 
 	if resp.StatusCode != http.StatusOK {

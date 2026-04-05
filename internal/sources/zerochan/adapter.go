@@ -15,7 +15,17 @@ func init() {
 		if username == "" {
 			return nil, fmt.Errorf("zerochan requires a username in config (sources.zerochan.username) — see https://www.zerochan.net/api")
 		}
+
+		// Resolve cookies: cookies_file (Netscape format) takes priority, then inline cookies string
 		cookies := cfg["cookies"]
+		if cookiesFile := cfg["cookies_file"]; cookiesFile != "" {
+			parsed, err := ParseCookiesFile(cookiesFile, "www.zerochan.net")
+			if err != nil {
+				return nil, fmt.Errorf("zerochan cookies_file: %w", err)
+			}
+			cookies = parsed
+		}
+
 		return NewAdapter(username, cookies), nil
 	})
 }
