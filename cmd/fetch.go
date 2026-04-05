@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/schollz/progressbar/v3"
@@ -222,39 +223,110 @@ func runFetch(cmd *cobra.Command, args []string) error {
 		emitter.Emit(output.NewEvent("capabilities", "", output.CapabilitiesData{Sources: caps}))
 	}
 
+	// Parallel fetch when multiple sources
+	if len(sourceNames) > 1 {
+		return fetchParallel(sourceNames, cfg, params, outputDir, db, checker, emitter)
+	}
+
+	// Single source — sequential
+	name := sourceNames[0]
+	return fetchSingle(name, cfg, params, outputDir, db, checker, emitter)
+}
+
+func fetchSingle(name string, cfg *config.Config, params *sources.SearchParams, outputPath string, db *data.DB, checker *dedup.Checker, emitter output.Emitter) error {
+	srcCfg := buildSourceConfig(cfg, name)
+	src, err := sources.Get(name, srcCfg)
+	if err != nil {
+		emitter.Emit(output.NewErrorEvent(name, err))
+		return nil
+	}
+
+	emitter.Emit(output.NewEvent("search_started", name, nil))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	result, err := src.Search(ctx, params)
+	cancel()
+	if err != nil {
+		emitter.Emit(output.NewErrorEvent(name, err))
+		return nil
+	}
+
+	emitter.Emit(output.NewEvent("search_complete", name, output.SearchCompleteData{Count: len(result.Wallpapers)}))
+
+	if len(result.Wallpapers) == 0 {
+		return nil
+	}
+
+	if db != nil && len(result.Tags) > 0 {
+		_ = db.SaveTags(result.Tags)
+	}
+
+	if err := downloadResults(context.Background(), result, name, outputPath, db, checker, emitter); err != nil {
+		emitter.Emit(output.NewErrorEvent(name, err))
+	}
+	return nil
+}
+
+func fetchParallel(sourceNames []string, cfg *config.Config, params *sources.SearchParams, outputPath string, db *data.DB, checker *dedup.Checker, emitter output.Emitter) error {
+	type searchResult struct {
+		name   string
+		result *sources.SearchResult
+		err    error
+	}
+
+	// Phase 1: Search all sources in parallel
+	results := make(chan searchResult, len(sourceNames))
+	var wg sync.WaitGroup
+
 	for _, name := range sourceNames {
-		srcCfg := buildSourceConfig(cfg, name)
-		src, err := sources.Get(name, srcCfg)
-		if err != nil {
-			emitter.Emit(output.NewErrorEvent(name, fmt.Errorf("unknown source: %s", name)))
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			srcCfg := buildSourceConfig(cfg, name)
+			src, err := sources.Get(name, srcCfg)
+			if err != nil {
+				results <- searchResult{name: name, err: err}
+				return
+			}
+
+			emitter.Emit(output.NewEvent("search_started", name, nil))
+
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			result, err := src.Search(ctx, params)
+			cancel()
+
+			results <- searchResult{name: name, result: result, err: err}
+		}(name)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Phase 2: Collect results, emit partial results on error
+	var allResults []searchResult
+	for r := range results {
+		if r.err != nil {
+			emitter.Emit(output.NewErrorEvent(r.name, r.err))
+			continue
+		}
+		emitter.Emit(output.NewEvent("search_complete", r.name, output.SearchCompleteData{Count: len(r.result.Wallpapers)}))
+		allResults = append(allResults, r)
+	}
+
+	// Phase 3: Download from each successful source
+	for _, r := range allResults {
+		if len(r.result.Wallpapers) == 0 {
 			continue
 		}
 
-		// Emit search started
-		emitter.Emit(output.NewEvent("search_started", name, nil))
-
-		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-		result, err := src.Search(ctx, params)
-		cancel()
-		if err != nil {
-			emitter.Emit(output.NewErrorEvent(name, err))
-			continue
+		if db != nil && len(r.result.Tags) > 0 {
+			_ = db.SaveTags(r.result.Tags)
 		}
 
-		emitter.Emit(output.NewEvent("search_complete", name, output.SearchCompleteData{Count: len(result.Wallpapers)}))
-
-		if len(result.Wallpapers) == 0 {
-			continue
-		}
-
-		// Save tags to database
-		if db != nil && len(result.Tags) > 0 {
-			_ = db.SaveTags(result.Tags)
-		}
-
-		// Download
-		if err := downloadResults(ctx, result, name, outputDir, db, checker, emitter); err != nil {
-			emitter.Emit(output.NewErrorEvent(name, err))
+		if err := downloadResults(context.Background(), r.result, r.name, outputPath, db, checker, emitter); err != nil {
+			emitter.Emit(output.NewErrorEvent(r.name, err))
 		}
 	}
 
