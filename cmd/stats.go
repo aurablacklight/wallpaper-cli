@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/user/wallpaper-cli/internal/utils"
 )
+
+var statsJSON bool
 
 var statsCmd = &cobra.Command{
 	Use:   "stats",
@@ -25,6 +28,7 @@ var statsCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(statsCmd)
+	statsCmd.Flags().BoolVar(&statsJSON, "json", false, "Output as JSON")
 }
 
 type StatsInfo struct {
@@ -98,6 +102,9 @@ func showFilesystemStats(basePath string) error {
 		}
 	}
 
+	if statsJSON {
+		return printStatsJSON(stats)
+	}
 	printStats(stats)
 	return nil
 }
@@ -146,6 +153,36 @@ func printStats(stats StatsInfo) {
 			fmt.Printf("   %-15s %d\n", res+":", count)
 		}
 	}
+}
+
+func printStatsJSON(stats StatsInfo) error {
+	type JSONStats struct {
+		TotalCount   int            `json:"total_count"`
+		TotalSize    int64          `json:"total_size_bytes"`
+		BySource     map[string]int `json:"by_source"`
+		ByResolution map[string]int `json:"by_resolution"`
+		RecentCount  int            `json:"recent_count_7d"`
+		OldestFile   string         `json:"oldest_file,omitempty"`
+		NewestFile   string         `json:"newest_file,omitempty"`
+	}
+
+	out := JSONStats{
+		TotalCount:   stats.TotalCount,
+		TotalSize:    stats.TotalSize,
+		BySource:     stats.BySource,
+		ByResolution: stats.ByResolution,
+		RecentCount:  stats.RecentCount,
+	}
+	if !stats.OldestFile.IsZero() {
+		out.OldestFile = stats.OldestFile.UTC().Format(time.RFC3339)
+	}
+	if !stats.NewestFile.IsZero() {
+		out.NewestFile = stats.NewestFile.UTC().Format(time.RFC3339)
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetEscapeHTML(false)
+	return enc.Encode(out)
 }
 
 func formatBytes(bytes int64) string {

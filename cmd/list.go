@@ -104,22 +104,36 @@ func parseSinceDuration(since string) time.Time {
 
 func outputJSON(images []data.ImageRecord) error {
 	type JSONImage struct {
-		Source       string    `json:"source"`
-		LocalPath    string    `json:"local_path"`
-		DownloadedAt time.Time `json:"downloaded_at"`
+		Hash         string `json:"hash"`
+		Source       string `json:"source"`
+		SourceID     string `json:"source_id"`
+		URL          string `json:"url"`
+		LocalPath    string `json:"local_path"`
+		Resolution   string `json:"resolution"`
+		AspectRatio  string `json:"aspect_ratio"`
+		Tags         string `json:"tags"`
+		DownloadedAt string `json:"downloaded_at"`
+		FileSize     int64  `json:"file_size"`
 	}
 
 	var output []JSONImage
 	for _, img := range images {
 		output = append(output, JSONImage{
+			Hash:         img.Hash,
 			Source:       img.Source,
+			SourceID:     img.SourceID,
+			URL:          img.URL,
 			LocalPath:    img.LocalPath,
-			DownloadedAt: img.DownloadedAt,
+			Resolution:   img.Resolution,
+			AspectRatio:  img.AspectRatio,
+			Tags:         img.Tags,
+			DownloadedAt: img.DownloadedAt.UTC().Format(time.RFC3339),
+			FileSize:     img.FileSize,
 		})
 	}
 
 	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
+	encoder.SetEscapeHTML(false)
 	return encoder.Encode(output)
 }
 

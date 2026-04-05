@@ -210,6 +210,18 @@ func runFetch(cmd *cobra.Command, args []string) error {
 	// Resolve which sources to query
 	sourceNames := resolveSourceNames(source)
 
+	// Emit capabilities at stream start (JSON mode only)
+	if jsonOutput {
+		var caps []interface{}
+		for _, name := range sourceNames {
+			srcCfg := buildSourceConfig(cfg, name)
+			if src, err := sources.Get(name, srcCfg); err == nil {
+				caps = append(caps, src.Capabilities())
+			}
+		}
+		emitter.Emit(output.NewEvent("capabilities", "", output.CapabilitiesData{Sources: caps}))
+	}
+
 	for _, name := range sourceNames {
 		srcCfg := buildSourceConfig(cfg, name)
 		src, err := sources.Get(name, srcCfg)
