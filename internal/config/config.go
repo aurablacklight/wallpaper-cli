@@ -38,6 +38,7 @@ type SourceConfig struct {
 	APIKey     string   `json:"api_key,omitempty"`
 	Login      string   `json:"login,omitempty"`      // Danbooru login username
 	Username   string   `json:"username,omitempty"`    // Zerochan username for User-Agent
+	Cookies    string   `json:"cookies,omitempty"`     // Session cookies for sources requiring browser auth
 	Subreddits []string `json:"subreddits,omitempty"`
 }
 

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-retryablehttp"
 	"github.com/user/wallpaper-cli/internal/sources"
 )
 
@@ -20,104 +19,106 @@ const (
 	DefaultRPS = 1.0 // 60 req/min = 1 req/s
 )
 
-// Entry represents a single image from the Zerochan JSON API.
-type Entry struct {
-	ID      int    `json:"id"`
-	Width   int    `json:"width"`
-	Height  int    `json:"height"`
-	Size    int    `json:"size"`
-	Primary string `json:"primary"` // primary tag
-	Src     string `json:"src"`     // may be thumbnail or full URL
-	Full    string `json:"full"`    // full-resolution URL (may be empty in list)
+// ListEntry is an item from the paginated search response (no full URL).
+type ListEntry struct {
+	ID        int      `json:"id"`
+	Width     int      `json:"width"`
+	Height    int      `json:"height"`
+	Thumbnail string   `json:"thumbnail"`
+	Tag       string   `json:"tag"`     // primary tag
+	Tags      []string `json:"tags"`
+	Source    string   `json:"source"`  // pixiv/other source URL
+	MD5       string   `json:"md5"`
+}
+
+// DetailEntry is a single-entry response with full-resolution URLs.
+type DetailEntry struct {
+	ID      int      `json:"id"`
+	Width   int      `json:"width"`
+	Height  int      `json:"height"`
+	Size    int      `json:"size"`
+	Full    string   `json:"full"`    // full-resolution URL
+	Large   string   `json:"large"`
+	Medium  string   `json:"medium"`
+	Small   string   `json:"small"`
+	Hash    string   `json:"hash"`
+	Primary string   `json:"primary"` // primary tag
 	Tags    []string `json:"tags"`
+	Source  string   `json:"source"`
 }
 
 // SearchResponse is the envelope for paginated Zerochan results.
 type SearchResponse struct {
-	Items []Entry `json:"items"`
+	Items []ListEntry `json:"items"`
 }
 
 type Client struct {
 	baseURL     string
 	httpClient  *http.Client
 	username    string
+	cookies     string // raw cookie header value
 	rateLimiter *sources.RateLimiter
 }
 
-func NewClient(username string) *Client {
-	retryClient := retryablehttp.NewClient()
-	retryClient.RetryMax = 3
-	retryClient.RetryWaitMin = 2 * time.Second
-	retryClient.RetryWaitMax = 15 * time.Second
-	retryClient.Logger = nil
-
-	// Disable automatic redirects — Zerochan redirects tags and strips ?json
-	stdClient := retryClient.StandardClient()
-	stdClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
+func NewClient(username string, cookies string) *Client {
 	return &Client{
-		baseURL:     BaseURL,
-		httpClient:  stdClient,
+		baseURL: BaseURL,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+			// Don't follow redirects automatically — we need to preserve ?json
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 		username:    username,
+		cookies:     cookies,
 		rateLimiter: sources.NewRateLimiterPerSecond(DefaultRPS),
 	}
 }
 
 func (c *Client) userAgent() string {
-	// Zerochan requires a browser-like User-Agent; non-browser UAs get blocked
-	// by their JS anti-bot challenge. We embed the username for API identification.
-	if c.username != "" {
-		return fmt.Sprintf("Mozilla/5.0 (compatible; wallpaper-cli/1.3; +%s)", c.username)
-	}
-	return "Mozilla/5.0 (compatible; wallpaper-cli/1.3)"
+	return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 }
 
-// Search queries Zerochan's JSON API.
-// Zerochan uses tag-in-URL-path: /{Tag}?json&l=N&p=page
-func (c *Client) Search(ctx context.Context, tag string, limit, page int, strict bool) ([]Entry, error) {
+// Search queries the Zerochan JSON API for a tag.
+func (c *Client) Search(ctx context.Context, tag string, limit, page int) ([]ListEntry, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, err
 	}
 
-	// Build URL
 	path := "/"
 	if tag != "" {
 		path += url.PathEscape(tag)
 	}
 
-	u, err := url.Parse(c.baseURL + path)
-	if err != nil {
-		return nil, err
-	}
-
-	q := u.Query()
-	q.Set("json", "")
+	u := c.baseURL + path + "?json"
 	if limit > 0 {
 		if limit > MaxPerPage {
 			limit = MaxPerPage
 		}
-		q.Set("l", strconv.Itoa(limit))
+		u += "&l=" + strconv.Itoa(limit)
 	}
 	if page > 1 {
-		q.Set("p", strconv.Itoa(page))
-	}
-	if strict {
-		q.Set("strict", "")
+		u += "&p=" + strconv.Itoa(page)
 	}
 
-	u.RawQuery = q.Encode()
-	// Zerochan expects ?json (no value), fix the encoding
-	u.RawQuery = strings.ReplaceAll(u.RawQuery, "json=", "json")
-	u.RawQuery = strings.ReplaceAll(u.RawQuery, "strict=", "strict")
+	return c.doSearch(ctx, u)
+}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+func (c *Client) setHeaders(req *http.Request) {
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.userAgent())
+	if c.cookies != "" {
+		req.Header.Set("Cookie", c.cookies)
+	}
+}
+
+func (c *Client) doSearch(ctx context.Context, rawURL string) ([]ListEntry, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.userAgent())
+	c.setHeaders(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -125,16 +126,18 @@ func (c *Client) Search(ctx context.Context, tag string, limit, page int, strict
 	}
 	defer resp.Body.Close()
 
-	// Zerochan returns 404 for empty results — this is NOT an error
+	// 404 = empty results (not an error)
 	if resp.StatusCode == http.StatusNotFound {
-		return []Entry{}, nil
+		return []ListEntry{}, nil
 	}
 
-	// Handle redirects (Zerochan redirects tag aliases, stripping ?json)
+	// Handle redirects (tag aliases) — preserve ?json
 	if resp.StatusCode == 301 || resp.StatusCode == 302 {
 		loc := resp.Header.Get("Location")
 		if loc != "" {
-			// Follow redirect but preserve ?json param
+			if !strings.HasPrefix(loc, "http") {
+				loc = c.baseURL + loc
+			}
 			if !strings.Contains(loc, "json") {
 				if strings.Contains(loc, "?") {
 					loc += "&json"
@@ -142,14 +145,16 @@ func (c *Client) Search(ctx context.Context, tag string, limit, page int, strict
 					loc += "?json"
 				}
 			}
-			resp.Body.Close()
-			return c.searchURL(ctx, loc, limit, strict)
+			if err := c.rateLimiter.Wait(ctx); err != nil {
+				return nil, err
+			}
+			return c.doSearch(ctx, loc)
 		}
 	}
 
-	// 503 = Zerochan anti-bot JS challenge — can't be solved without a browser
+	// 503 = JS anti-bot challenge
 	if resp.StatusCode == http.StatusServiceUnavailable {
-		return nil, fmt.Errorf("zerochan returned 503 (anti-bot challenge) — this source requires browser session cookies; see https://www.zerochan.net/api for details")
+		return nil, fmt.Errorf("zerochan returned 503 (anti-bot challenge) — set session cookies in config (from browser login) to bypass")
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -164,44 +169,8 @@ func (c *Client) Search(ctx context.Context, tag string, limit, page int, strict
 	return searchResp.Items, nil
 }
 
-// searchURL is a helper for following redirects with preserved ?json param.
-func (c *Client) searchURL(ctx context.Context, rawURL string, limit int, strict bool) ([]Entry, error) {
-	if err := c.rateLimiter.Wait(ctx); err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.userAgent())
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("zerochan redirect request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return []Entry{}, nil
-	}
-	if resp.StatusCode == http.StatusServiceUnavailable {
-		return nil, fmt.Errorf("zerochan returned 503 (anti-bot challenge) — this source requires browser session cookies")
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("zerochan API: %s (status %d)", resp.Status, resp.StatusCode)
-	}
-
-	var searchResp SearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
-		return nil, fmt.Errorf("zerochan decode: %w", err)
-	}
-	return searchResp.Items, nil
-}
-
-// GetEntry fetches a single entry by ID for the full-resolution URL.
-func (c *Client) GetEntry(ctx context.Context, id int) (*Entry, error) {
+// GetDetail fetches a single entry by ID for the full-resolution URL.
+func (c *Client) GetDetail(ctx context.Context, id int) (*DetailEntry, error) {
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, err
 	}
@@ -211,29 +180,28 @@ func (c *Client) GetEntry(ctx context.Context, id int) (*Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.userAgent())
+	c.setHeaders(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("zerochan entry request: %w", err)
+		return nil, fmt.Errorf("zerochan detail: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("zerochan entry: %s (status %d)", resp.Status, resp.StatusCode)
+		return nil, fmt.Errorf("zerochan detail: %s (status %d)", resp.Status, resp.StatusCode)
 	}
 
-	var entry Entry
+	var entry DetailEntry
 	if err := json.NewDecoder(resp.Body).Decode(&entry); err != nil {
-		return nil, fmt.Errorf("zerochan entry decode: %w", err)
+		return nil, fmt.Errorf("zerochan detail decode: %w", err)
 	}
 
 	return &entry, nil
 }
 
-func (c *Client) PaginatedSearch(ctx context.Context, tag string, limit int, strict bool) ([]Entry, error) {
-	var all []Entry
+func (c *Client) PaginatedSearch(ctx context.Context, tag string, limit int) ([]ListEntry, error) {
+	var all []ListEntry
 	page := 1
 	perPage := MaxPerPage
 	if limit < perPage {
@@ -241,7 +209,7 @@ func (c *Client) PaginatedSearch(ctx context.Context, tag string, limit int, str
 	}
 
 	for len(all) < limit {
-		entries, err := c.Search(ctx, tag, perPage, page, strict)
+		entries, err := c.Search(ctx, tag, perPage, page)
 		if err != nil {
 			return all, err
 		}

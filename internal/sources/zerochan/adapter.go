@@ -13,9 +13,10 @@ func init() {
 	sources.Register("zerochan", func(cfg map[string]string) (sources.Source, error) {
 		username := cfg["username"]
 		if username == "" {
-			return nil, fmt.Errorf("zerochan requires a username in config (sources.zerochan.username) for the User-Agent header — see https://www.zerochan.net/api")
+			return nil, fmt.Errorf("zerochan requires a username in config (sources.zerochan.username) — see https://www.zerochan.net/api")
 		}
-		return NewAdapter(username), nil
+		cookies := cfg["cookies"]
+		return NewAdapter(username, cookies), nil
 	})
 }
 
@@ -23,27 +24,23 @@ type Adapter struct {
 	client *Client
 }
 
-func NewAdapter(username string) *Adapter {
-	return &Adapter{client: NewClient(username)}
+func NewAdapter(username, cookies string) *Adapter {
+	return &Adapter{client: NewClient(username, cookies)}
 }
 
 func (a *Adapter) Name() string { return "zerochan" }
 
 func (a *Adapter) Search(ctx context.Context, params *sources.SearchParams) (*sources.SearchResult, error) {
-	// Zerochan uses tag-in-URL-path, take the first tag
 	tag := strings.ReplaceAll(params.Tags, ",", " ")
 	tag = strings.TrimSpace(tag)
 
-	// Zerochan supports single-tag or comma-separated in URL path
-	// For simplicity, use the first tag
+	// Zerochan uses single-tag URL path — take the first tag
 	if parts := strings.Fields(tag); len(parts) > 0 {
 		tag = parts[0]
 	}
 
-	strict := false
-	// Could be passed via params in future
-
-	entries, err := a.client.PaginatedSearch(ctx, tag, params.Limit, strict)
+	// Phase 1: List search (returns IDs + thumbnails, no full URLs)
+	entries, err := a.client.PaginatedSearch(ctx, tag, params.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -53,31 +50,47 @@ func (a *Adapter) Search(ctx context.Context, params *sources.SearchParams) (*so
 	}
 
 	seen := make(map[string]bool)
+
+	// Phase 2: Fetch full details for each entry (2-call pattern)
 	for _, e := range entries {
-		// Determine the best URL
-		fileURL := e.Full
+		detail, err := a.client.GetDetail(ctx, e.ID)
+		if err != nil {
+			// Fall back to thumbnail if detail fetch fails
+			w := sources.ResultWallpaper{
+				ID:         fmt.Sprintf("%d", e.ID),
+				SourceName: "zerochan",
+				SourceID:   fmt.Sprintf("%d", e.ID),
+				URL:        e.Thumbnail,
+				Resolution: fmt.Sprintf("%dx%d", e.Width, e.Height),
+				Format:     "jpg",
+			}
+			result.Wallpapers = append(result.Wallpapers, w)
+			continue
+		}
+
+		fileURL := detail.Full
 		if fileURL == "" {
-			fileURL = e.Src
+			fileURL = detail.Large
 		}
 		if fileURL == "" {
 			continue
 		}
 
 		w := sources.ResultWallpaper{
-			ID:         fmt.Sprintf("%d", e.ID),
+			ID:         fmt.Sprintf("%d", detail.ID),
 			SourceName: "zerochan",
-			SourceID:   fmt.Sprintf("%d", e.ID),
+			SourceID:   fmt.Sprintf("%d", detail.ID),
 			URL:        fileURL,
-			Resolution: fmt.Sprintf("%dx%d", e.Width, e.Height),
-			FileSize:   int64(e.Size),
+			Resolution: fmt.Sprintf("%dx%d", detail.Width, detail.Height),
+			FileSize:   int64(detail.Size),
 			Format:     extensionFromURL(fileURL),
 		}
 
-		// Collect tags
-		if e.Primary != "" {
-			w.Tags = append(w.Tags, e.Primary)
+		// Collect tags from detail
+		if detail.Primary != "" {
+			w.Tags = append(w.Tags, detail.Primary)
 		}
-		w.Tags = append(w.Tags, e.Tags...)
+		w.Tags = append(w.Tags, detail.Tags...)
 
 		result.Wallpapers = append(result.Wallpapers, w)
 
@@ -102,12 +115,12 @@ func (a *Adapter) Capabilities() *sources.Capabilities {
 		SupportsResolution:  false,
 		SupportsAspectRatio: false,
 		SupportsTags:        true,
-		MaxTags:             1, // URL-path based, effectively one primary tag
+		MaxTags:             1,
 		SupportedSorting:    []string{"latest"},
 		SupportsTimePeriod:  false,
-		RequiresAuth:        false,
+		RequiresAuth:        true,
 		AuthOptional:        false,
-		AuthFields:          []string{"username"},
+		AuthFields:          []string{"username", "cookies"},
 		RateLimit:           "60 requests per minute",
 	}
 }
