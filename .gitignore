@@ -46,3 +46,6 @@ test-downloads/
 # Go workspace
 go.work
 go.work.sum
+
+# Release binaries
+wallpaper-cli-*
