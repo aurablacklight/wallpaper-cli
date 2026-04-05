@@ -24,8 +24,8 @@ type Post struct {
 	TagStringCopyright string `json:"tag_string_copyright"`  // Danbooru
 	TagStringGeneral   string `json:"tag_string_general"`    // Danbooru
 	TagStringMeta      string `json:"tag_string_meta"`       // Danbooru
-	MD5           string `json:"md5"`
-	CreatedAt     string `json:"created_at"`
+	MD5           string      `json:"md5"`
+	CreatedAt     interface{} `json:"created_at"` // string on Danbooru, number on Moebooru
 }
 
 // GetWidth returns the width, supporting both Danbooru and Moebooru field names.
