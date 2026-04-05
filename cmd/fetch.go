@@ -25,6 +25,7 @@ import (
 	_ "github.com/user/wallpaper-cli/internal/sources/konachan"
 	_ "github.com/user/wallpaper-cli/internal/sources/reddit"
 	_ "github.com/user/wallpaper-cli/internal/sources/wallhaven"
+	_ "github.com/user/wallpaper-cli/internal/sources/zerochan"
 )
 
 var (
