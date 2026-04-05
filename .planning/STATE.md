@@ -1,15 +1,27 @@
 # Project State: Wallpaper CLI Tool
 
-**Status:** Idle — Post-cleanup, awaiting M003 definition
+**Status:** Active — Milestone v1.3 started
 **Last Updated:** 2026-04-04
 
 ---
 
-## Current State
+## Current Position
 
-The CLI underwent a major cleanup after M002. Stripped features that don't belong in a CLI tool (TUI, schedule/daemon) and fixed architectural issues (broken data layer, filesystem-scanning commands).
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-04 — Milestone v1.3 started
 
-### Active Command Surface
+## Project Reference
+
+See: .planning/PROJECT.md (updated 2026-04-04)
+
+**Core value:** Reliably fetch, deduplicate, and organize wallpapers from any supported source
+**Current focus:** v1.3 Sources, API & Downloads
+
+---
+
+## Active Command Surface
 
 | Command | Description |
 |---------|-------------|
@@ -28,7 +40,10 @@ The CLI underwent a major cleanup after M002. Stripped features that don't belon
 - **Go source files:** 39
 - **Dependencies:** 32 (direct + indirect)
 - **Tests:** 47 passing across 7 packages
-- **Removed:** TUI (Bubble Tea), schedule/daemon (cron), stub commands
+
+---
+
+## Accumulated Context
 
 ### Post-M002 Cleanup (2026-04-04)
 
@@ -53,18 +68,6 @@ Core download pipeline: Wallhaven + Reddit sources, concurrent downloads, pHash 
 ### M002: Desktop Integration (v1.2) — Complete (Trimmed)
 
 Cross-platform `set` command, `list`/`export`/`stats` commands, collections (favorites/ratings/playlists). TUI and schedule features were stripped during cleanup — they belong in a separate GUI app.
-
----
-
-## Next Steps
-
-No active milestone. Direction: keep CLI focused as a backend tool. A separate GUI app will be built on top for browsing/scheduling.
-
-Candidates for M003:
-- Additional wallpaper sources (Zerochan, Danbooru, etc.)
-- Better export format / stable JSON API contract
-- Wallpaper tagging / metadata enrichment
-- Performance: parallel source fetching, resumable downloads
 
 ---
 
