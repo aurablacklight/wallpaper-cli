@@ -21,6 +21,7 @@ import (
 	"github.com/user/wallpaper-cli/internal/validate"
 
 	// Register source adapters
+	_ "github.com/user/wallpaper-cli/internal/sources/danbooru"
 	_ "github.com/user/wallpaper-cli/internal/sources/reddit"
 	_ "github.com/user/wallpaper-cli/internal/sources/wallhaven"
 )
@@ -258,6 +259,12 @@ func buildSourceConfig(cfg *config.Config, name string) map[string]string {
 	if sc, ok := cfg.Sources[name]; ok {
 		if sc.APIKey != "" {
 			m["api_key"] = sc.APIKey
+		}
+		if sc.Login != "" {
+			m["login"] = sc.Login
+		}
+		if sc.Username != "" {
+			m["username"] = sc.Username
 		}
 		if len(sc.Subreddits) > 0 {
 			m["subreddits"] = strings.Join(sc.Subreddits, ",")

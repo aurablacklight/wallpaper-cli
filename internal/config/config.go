@@ -36,6 +36,8 @@ type WallpaperRecord struct {
 type SourceConfig struct {
 	Enabled    bool     `json:"enabled"`
 	APIKey     string   `json:"api_key,omitempty"`
+	Login      string   `json:"login,omitempty"`      // Danbooru login username
+	Username   string   `json:"username,omitempty"`    // Zerochan username for User-Agent
 	Subreddits []string `json:"subreddits,omitempty"`
 }
 
@@ -58,6 +60,15 @@ func DefaultConfig() *Config {
 			"reddit": {
 				Enabled:    true,
 				Subreddits: []string{"Animewallpaper"},
+			},
+			"danbooru": {
+				Enabled: true,
+			},
+			"konachan": {
+				Enabled: true,
+			},
+			"zerochan": {
+				Enabled: true,
 			},
 		},
 		WallpaperHistory: make([]WallpaperRecord, 0), // Initialize empty
