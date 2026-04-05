@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/user/wallpaper-cli/internal/data"
-	"github.com/user/wallpaper-cli/internal/utils"
 )
 
 var (
@@ -82,15 +81,14 @@ func runExport(cmd *cobra.Command, args []string) error {
 	// Open database
 	db, err := data.NewDB(dbPath)
 	if err != nil {
-		// If database doesn't exist, fall back to filesystem scan
-		return exportFromFilesystem()
+		return fmt.Errorf("opening database: %w", err)
 	}
 	defer db.Close()
 
 	// Query images from database
 	images, err := queryImagesForExport(db, exportSource, exportSince)
 	if err != nil {
-		return exportFromFilesystem()
+		return fmt.Errorf("querying images: %w", err)
 	}
 
 	// Build export data
@@ -107,99 +105,31 @@ func runExport(cmd *cobra.Command, args []string) error {
 }
 
 func queryImagesForExport(db *data.DB, source, since string) ([]ExportRecord, error) {
-	// For now, scan filesystem as database query methods are limited
-	return scanFilesystemForExport(source, since)
-}
-
-func scanFilesystemForExport(source, since string) ([]ExportRecord, error) {
-	home, err := os.UserHomeDir()
+	images, err := db.ListImages(source, parseSinceDuration(since))
 	if err != nil {
 		return nil, err
 	}
 
-	basePath := filepath.Join(home, "Pictures", "wallpapers")
-
 	var records []ExportRecord
-	var cutoff time.Time
-
-	if since != "" {
-		days := 0
-		switch since {
-		case "1d":
-			days = 1
-		case "7d":
-			days = 7
-		case "30d":
-			days = 30
-		default:
-			fmt.Sscanf(since, "%dd", &days)
+	for _, img := range images {
+		var tags []string
+		if img.Tags != "" {
+			json.Unmarshal([]byte(img.Tags), &tags)
 		}
-		if days > 0 {
-			cutoff = time.Now().AddDate(0, 0, -days)
-		}
-	}
-
-	sources := []string{"wallhaven", "reddit"}
-	if source != "" {
-		sources = []string{source}
-	}
-
-	for _, src := range sources {
-		srcPath := filepath.Join(basePath, src)
-		entries, err := os.ReadDir(srcPath)
-		if err != nil {
-			continue
-		}
-
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-
-			info, err := entry.Info()
-			if err != nil {
-				continue
-			}
-
-			// Check date filter
-			if !cutoff.IsZero() && info.ModTime().Before(cutoff) {
-				continue
-			}
-
-			fullPath := filepath.Join(srcPath, entry.Name())
-
-			// Parse filename for metadata
-			id, resolution := utils.ParseWallpaperFilename(entry.Name())
-
-			records = append(records, ExportRecord{
-				ID:           id,
-				Source:       src,
-				LocalPath:    fullPath,
-				Resolution:   resolution,
-				DownloadedAt: info.ModTime().Format(time.RFC3339),
-				FileSize:     info.Size(),
-			})
-		}
+		records = append(records, ExportRecord{
+			ID:           img.Hash,
+			Source:       img.Source,
+			LocalPath:    img.LocalPath,
+			URL:          img.URL,
+			Resolution:   img.Resolution,
+			AspectRatio:  img.AspectRatio,
+			Tags:         tags,
+			DownloadedAt: img.DownloadedAt.Format(time.RFC3339),
+			FileSize:     img.FileSize,
+		})
 	}
 
 	return records, nil
-}
-
-func exportFromFilesystem() error {
-	records, err := scanFilesystemForExport(exportSource, exportSince)
-	if err != nil {
-		return fmt.Errorf("scanning filesystem: %w", err)
-	}
-
-	export := ExportData{
-		Version:     "1.0",
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
-		CLIVersion:  "1.2.0",
-		Count:       len(records),
-		Wallpapers:  records,
-	}
-
-	return writeExport(export)
 }
 
 func writeExport(data ExportData) error {

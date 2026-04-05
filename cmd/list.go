@@ -74,74 +74,32 @@ func runList(cmd *cobra.Command, args []string) error {
 }
 
 func queryImages(db *data.DB, source, since string) ([]data.ImageRecord, error) {
-	// This is a simplified version - in production, you'd add methods to DB
-	// For now, we'll scan from the filesystem if database query is limited
-	return scanFilesystem(source, since)
+	return db.ListImages(source, parseSinceDuration(since))
 }
 
-func scanFilesystem(source, since string) ([]data.ImageRecord, error) {
-	home, _ := os.UserHomeDir()
-	basePath := filepath.Join(home, "Pictures", "wallpapers")
-
-	var images []data.ImageRecord
-	var cutoff time.Time
-
-	if since != "" {
-		days := 0
-		switch since {
-		case "1d":
-			days = 1
-		case "7d":
-			days = 7
-		case "30d":
-			days = 30
-		default:
-			if strings.HasSuffix(since, "d") {
-				fmt.Sscanf(since, "%dd", &days)
-			}
-		}
-		if days > 0 {
-			cutoff = time.Now().AddDate(0, 0, -days)
+// parseSinceDuration converts a duration string like "1d", "7d", "30d" to
+// the corresponding cutoff time. Returns zero time if empty or invalid.
+func parseSinceDuration(since string) time.Time {
+	if since == "" {
+		return time.Time{}
+	}
+	days := 0
+	switch since {
+	case "1d":
+		days = 1
+	case "7d":
+		days = 7
+	case "30d":
+		days = 30
+	default:
+		if strings.HasSuffix(since, "d") {
+			fmt.Sscanf(since, "%dd", &days)
 		}
 	}
-
-	sources := []string{"wallhaven", "reddit"}
-	if source != "" {
-		sources = []string{source}
+	if days > 0 {
+		return time.Now().AddDate(0, 0, -days)
 	}
-
-	for _, src := range sources {
-		srcPath := filepath.Join(basePath, src)
-		entries, err := os.ReadDir(srcPath)
-		if err != nil {
-			continue // Skip if directory doesn't exist
-		}
-
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-
-			info, err := entry.Info()
-			if err != nil {
-				continue
-			}
-
-			// Check date filter
-			if !cutoff.IsZero() && info.ModTime().Before(cutoff) {
-				continue
-			}
-
-			fullPath := filepath.Join(srcPath, entry.Name())
-			images = append(images, data.ImageRecord{
-				Source:       src,
-				LocalPath:    fullPath,
-				DownloadedAt: info.ModTime(),
-			})
-		}
-	}
-
-	return images, nil
+	return time.Time{}
 }
 
 func outputJSON(images []data.ImageRecord) error {
