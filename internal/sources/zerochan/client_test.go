@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/user/wallpaper-cli/internal/sources"
@@ -71,8 +72,8 @@ func TestSearch_UserAgent(t *testing.T) {
 
 	client.Search(context.Background(), "test", 10, 1, false)
 
-	if receivedUA != "wallpaper-cli - myuser" {
-		t.Errorf("User-Agent = %q, want 'wallpaper-cli - myuser'", receivedUA)
+	if !strings.Contains(receivedUA, "myuser") || !strings.Contains(receivedUA, "Mozilla") {
+		t.Errorf("User-Agent = %q, want Mozilla-based UA containing username", receivedUA)
 	}
 }
 

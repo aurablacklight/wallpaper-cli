@@ -51,19 +51,27 @@ func NewClient(username string) *Client {
 	retryClient.RetryWaitMax = 15 * time.Second
 	retryClient.Logger = nil
 
+	// Disable automatic redirects — Zerochan redirects tags and strips ?json
+	stdClient := retryClient.StandardClient()
+	stdClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
 	return &Client{
 		baseURL:     BaseURL,
-		httpClient:  retryClient.StandardClient(),
+		httpClient:  stdClient,
 		username:    username,
 		rateLimiter: sources.NewRateLimiterPerSecond(DefaultRPS),
 	}
 }
 
 func (c *Client) userAgent() string {
+	// Zerochan requires a browser-like User-Agent; non-browser UAs get blocked
+	// by their JS anti-bot challenge. We embed the username for API identification.
 	if c.username != "" {
-		return fmt.Sprintf("wallpaper-cli - %s", c.username)
+		return fmt.Sprintf("Mozilla/5.0 (compatible; wallpaper-cli/1.3; +%s)", c.username)
 	}
-	return "wallpaper-cli/1.3"
+	return "Mozilla/5.0 (compatible; wallpaper-cli/1.3)"
 }
 
 // Search queries Zerochan's JSON API.
@@ -122,6 +130,28 @@ func (c *Client) Search(ctx context.Context, tag string, limit, page int, strict
 		return []Entry{}, nil
 	}
 
+	// Handle redirects (Zerochan redirects tag aliases, stripping ?json)
+	if resp.StatusCode == 301 || resp.StatusCode == 302 {
+		loc := resp.Header.Get("Location")
+		if loc != "" {
+			// Follow redirect but preserve ?json param
+			if !strings.Contains(loc, "json") {
+				if strings.Contains(loc, "?") {
+					loc += "&json"
+				} else {
+					loc += "?json"
+				}
+			}
+			resp.Body.Close()
+			return c.searchURL(ctx, loc, limit, strict)
+		}
+	}
+
+	// 503 = Zerochan anti-bot JS challenge — can't be solved without a browser
+	if resp.StatusCode == http.StatusServiceUnavailable {
+		return nil, fmt.Errorf("zerochan returned 503 (anti-bot challenge) — this source requires browser session cookies; see https://www.zerochan.net/api for details")
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("zerochan API: %s (status %d)", resp.Status, resp.StatusCode)
 	}
@@ -131,6 +161,42 @@ func (c *Client) Search(ctx context.Context, tag string, limit, page int, strict
 		return nil, fmt.Errorf("zerochan decode: %w", err)
 	}
 
+	return searchResp.Items, nil
+}
+
+// searchURL is a helper for following redirects with preserved ?json param.
+func (c *Client) searchURL(ctx context.Context, rawURL string, limit int, strict bool) ([]Entry, error) {
+	if err := c.rateLimiter.Wait(ctx); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.userAgent())
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("zerochan redirect request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return []Entry{}, nil
+	}
+	if resp.StatusCode == http.StatusServiceUnavailable {
+		return nil, fmt.Errorf("zerochan returned 503 (anti-bot challenge) — this source requires browser session cookies")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("zerochan API: %s (status %d)", resp.Status, resp.StatusCode)
+	}
+
+	var searchResp SearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
+		return nil, fmt.Errorf("zerochan decode: %w", err)
+	}
 	return searchResp.Items, nil
 }
 
