@@ -60,6 +60,21 @@ func (db *DB) Close() error {
 	return db.conn.Close()
 }
 
+// Exec executes a query that doesn't return rows.
+func (db *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return db.conn.Exec(query, args...)
+}
+
+// Query executes a query that returns rows.
+func (db *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	return db.conn.Query(query, args...)
+}
+
+// QueryRow executes a query that returns at most one row.
+func (db *DB) QueryRow(query string, args ...interface{}) *sql.Row {
+	return db.conn.QueryRow(query, args...)
+}
+
 // createTables creates the database schema
 func (db *DB) createTables() error {
 	schema := `
@@ -85,6 +100,45 @@ func (db *DB) createTables() error {
 		key TEXT PRIMARY KEY,
 		value TEXT
 	);
+
+	CREATE TABLE IF NOT EXISTS favorites (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		image_hash TEXT UNIQUE NOT NULL,
+		added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (image_hash) REFERENCES images(hash)
+	);
+
+	CREATE TABLE IF NOT EXISTS ratings (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		image_hash TEXT UNIQUE NOT NULL,
+		rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+		notes TEXT DEFAULT '',
+		rated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (image_hash) REFERENCES images(hash)
+	);
+
+	CREATE TABLE IF NOT EXISTS playlists (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		description TEXT DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS playlist_items (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		playlist_id TEXT NOT NULL,
+		image_hash TEXT NOT NULL,
+		position INTEGER NOT NULL,
+		added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+		FOREIGN KEY (image_hash) REFERENCES images(hash),
+		UNIQUE(playlist_id, image_hash)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_favorites_hash ON favorites(image_hash);
+	CREATE INDEX IF NOT EXISTS idx_ratings_hash ON ratings(image_hash);
+	CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist ON playlist_items(playlist_id);
 	`
 
 	_, err := db.conn.Exec(schema)
@@ -194,6 +248,40 @@ func (db *DB) GetStats() (total int, bySource map[string]int, err error) {
 	}
 
 	return total, bySource, rows.Err()
+}
+
+// ListImages returns images with optional filtering by source and minimum date.
+func (db *DB) ListImages(source string, since time.Time) ([]ImageRecord, error) {
+	query := `SELECT id, hash, source, source_id, url, local_path, resolution, aspect_ratio, tags, downloaded_at, file_size
+		FROM images WHERE 1=1`
+	var args []interface{}
+
+	if source != "" {
+		query += ` AND source = ?`
+		args = append(args, source)
+	}
+	if !since.IsZero() {
+		query += ` AND downloaded_at >= ?`
+		args = append(args, since.Format("2006-01-02 15:04:05"))
+	}
+
+	query += ` ORDER BY downloaded_at DESC`
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []ImageRecord
+	for rows.Next() {
+		img, err := scanImage(rows)
+		if err != nil {
+			continue
+		}
+		results = append(results, *img)
+	}
+	return results, rows.Err()
 }
 
 // rowScanner interface for scanning rows
