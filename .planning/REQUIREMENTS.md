@@ -71,29 +71,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FND-01 | — | Pending |
-| FND-02 | — | Pending |
-| FND-03 | — | Pending |
-| FND-04 | — | Pending |
-| SRC-01 | — | Pending |
-| SRC-02 | — | Pending |
-| SRC-03 | — | Pending |
-| SRC-04 | — | Pending |
-| SRC-05 | — | Pending |
-| TAG-01 | — | Pending |
-| TAG-02 | — | Pending |
-| API-01 | — | Pending |
-| API-02 | — | Pending |
-| API-03 | — | Pending |
-| DL-01 | — | Pending |
-| DL-02 | — | Pending |
-| DL-03 | — | Pending |
+| FND-01 | Phase 4 | Pending |
+| FND-02 | Phase 4 | Pending |
+| FND-03 | Phase 4 | Pending |
+| FND-04 | Phase 4 | Pending |
+| SRC-01 | Phase 5 | Pending |
+| SRC-02 | Phase 5 | Pending |
+| TAG-01 | Phase 5 | Pending |
+| TAG-02 | Phase 5 | Pending |
+| SRC-03 | Phase 6 | Pending |
+| SRC-04 | Phase 7 | Pending |
+| API-01 | Phase 8 | Pending |
+| API-02 | Phase 8 | Pending |
+| API-03 | Phase 8 | Pending |
+| SRC-05 | Phase 8 | Pending |
+| DL-01 | Phase 9 | Pending |
+| DL-02 | Phase 9 | Pending |
+| DL-03 | Phase 9 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17 (pending roadmap creation)
+- Mapped to phases: 17
+- Unmapped: 0
+
+**Notes:**
+- TAG-01 is assigned to Phase 5 (first adapter to write tags). Phases 6 and 7 extend tag harvesting for their respective sources — TAG-01 is fully satisfied when all three adapters are complete.
 
 ---
 *Requirements defined: 2026-04-04*
-*Last updated: 2026-04-04 after initial definition*
+*Last updated: 2026-04-04 after roadmap creation (phases 4-9)*

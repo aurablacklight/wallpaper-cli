@@ -1,23 +1,27 @@
 # Project State: Wallpaper CLI Tool
 
-**Status:** Active — Milestone v1.3 started
+**Status:** Active — Milestone v1.3 roadmap created
 **Last Updated:** 2026-04-04
 
 ---
-
-## Current Position
-
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-04 — Milestone v1.3 started
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** Reliably fetch, deduplicate, and organize wallpapers from any supported source
-**Current focus:** v1.3 Sources, API & Downloads
+**Current focus:** Phase 4 — Foundation (v1.3 Sources, API & Downloads)
+
+---
+
+## Current Position
+
+Phase: 4 of 9 (Foundation)
+Plan: — of — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-04-04 — v1.3 roadmap created (phases 4-9 defined)
+
+Progress: [░░░░░░░░░░] 0% (v1.3)
 
 ---
 
@@ -45,30 +49,44 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Accumulated Context
 
-### Post-M002 Cleanup (2026-04-04)
+### Decisions
 
-| Change | Commit | Impact |
-|--------|--------|--------|
-| Remove schedule/daemon | `5e92dc7` | Fixed broken cron dep, -968 lines |
-| Strip TUI + Bubble Tea | `62a04ff` | -3,238 lines, dropped 25+ deps |
-| Remove stub commands | `59c44f1` | search/update/clean were empty |
-| Fix data layer + tests | `9d29d4d` | Added missing DB schema, exposed SQL methods |
-| List/export use DB | `b3d1d79` | Replaced filesystem scanning |
-| Add test coverage | `d57f912` | validate, config, cmd registration tests |
-| Rewrite README | `2590172` | Matches actual CLI scope |
+- [v1.3]: JSON lines to stdout, human text to stderr — emitter abstraction required before any adapter work
+- [v1.3]: `source_tags` SQLite table must be created via migration before first tag insert — retrofitting is costly
+- [v1.3]: Danbooru before Konachan — 80% code overlap via shared booru base package
+- [v1.3]: Zerochan last — most divergent API (tag-in-URL-path, 2-call pattern, 404-as-empty, mandatory User-Agent)
+- [v1.3]: Parallel fetch (`--source all`) after all adapters stable — rate limiter isolation is a prerequisite
+- [v1.3]: 2 new deps approved: `cenkalti/backoff/v4`, `hashicorp/go-retryablehttp`
+
+### Research Flags for Planning
+
+- **Phase 7 (Zerochan):** Verify if `full` URL is available in list responses (may eliminate 2-call pattern)
+- **Phase 9 (Parallel fetch):** Resolve `--limit` semantics — per-source or total? Consider `--limit-total` flag
+- **Phase 6 (Konachan):** Empirically validate 0.5 req/s default; expose config knob for user tuning
+
+### Pending Todos
+
+None yet.
+
+### Blockers/Concerns
+
+None yet.
 
 ---
 
-## Completed Milestones
+## Performance Metrics
 
-### M001: Wallpaper CLI Tool (v1.0/1.1) — Complete
+**Velocity:**
+- Total plans completed: 0 (v1.3)
+- Average duration: —
+- Total execution time: —
 
-Core download pipeline: Wallhaven + Reddit sources, concurrent downloads, pHash deduplication, SQLite tracking, cross-platform builds, progress bars.
-
-### M002: Desktop Integration (v1.2) — Complete (Trimmed)
-
-Cross-platform `set` command, `list`/`export`/`stats` commands, collections (favorites/ratings/playlists). TUI and schedule features were stripped during cleanup — they belong in a separate GUI app.
+*Updated after each plan completion*
 
 ---
 
-*State maintained by GSD workflow*
+## Session Continuity
+
+Last session: 2026-04-04
+Stopped at: Roadmap created — ready to plan Phase 4
+Resume file: None
