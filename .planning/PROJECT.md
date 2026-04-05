@@ -2,21 +2,11 @@
 
 ## What This Is
 
-A resource-efficient CLI tool for downloading and managing anime wallpapers from multiple sources. Designed as a headless backend — a separate GUI app will sit on top, consuming structured JSON output. Power users can also use it directly from the terminal.
+A resource-efficient CLI tool for downloading and managing anime wallpapers from multiple sources (Wallhaven, Reddit, Danbooru, Konachan). Designed as a headless backend — a separate GUI app will sit on top, consuming structured JSON output. Power users can also use it directly from the terminal.
 
 ## Core Value
 
 Reliably fetch, deduplicate, and organize wallpapers from any supported source — the CLI is the single source of truth for the wallpaper collection.
-
-## Current Milestone: v1.3 Sources, API & Downloads
-
-**Goal:** Expand the CLI into a multi-source, API-driven backend with a robust download pipeline — ready for a GUI app to consume.
-
-**Target features:**
-- 3 new source adapters (Danbooru, Zerochan, Konachan)
-- Source tag harvesting from all APIs
-- Stable JSON API contract with event stream
-- Download pipeline improvements (resumable, parallel, retry)
 
 ## Requirements
 
@@ -31,18 +21,24 @@ Reliably fetch, deduplicate, and organize wallpapers from any supported source �
 - ✓ List/export from database with filtering — v1.2
 - ✓ Config management — v1.2
 - ✓ Collection statistics — v1.2
+- ✓ Source interface + registry (plug-in new sources) — v1.3
+- ✓ Output emitter (NDJSON to stdout, text to stderr) — v1.3
+- ✓ Normalized source_tags table with tag harvesting — v1.3
+- ✓ Per-source rate limiters (isolated) — v1.3
+- ✓ Danbooru adapter with tag search, pagination, auth — v1.3
+- ✓ Konachan adapter (Moebooru-compatible) — v1.3
+- ✓ Tag category metadata (general, character, copyright, artist, meta) — v1.3
+- ✓ --json flag on fetch/list/stats with stable contract — v1.3
+- ✓ JSON lines event stream with capabilities — v1.3
+- ✓ Partial results on multi-source failure — v1.3
+- ✓ Source capability advertisement — v1.3
+- ✓ Resumable downloads (.part + HTTP Range) — v1.3
+- ✓ Retry with exponential backoff + Retry-After — v1.3
+- ✓ Parallel multi-source fetch (--source all) — v1.3
 
 ### Active
 
-- [ ] Danbooru source adapter with tag-based search
-- [ ] Zerochan source adapter
-- [ ] Konachan source adapter
-- [ ] Source tag harvesting — persist tags from all source APIs in DB
-- [ ] Structured JSON output for all commands (query, CRUD)
-- [ ] JSON lines event stream for real-time progress
-- [ ] Resumable downloads (partial file recovery)
-- [ ] Parallel multi-source fetching
-- [ ] Retry with exponential backoff
+(None — awaiting next milestone)
 
 ### Out of Scope
 
@@ -51,15 +47,16 @@ Reliably fetch, deduplicate, and organize wallpapers from any supported source �
 - AI-powered auto-tagging — deferred to future milestone, harvest source tags first
 - Cloud sync — distributed systems complexity, no current need
 - Multi-monitor wallpaper setting — deferred to future milestone
+- Zerochan live fetching from CLI — anti-bot uses TLS fingerprinting, requires browser engine (GUI app)
 
 ## Context
 
 - Go CLI using Cobra, Viper config, SQLite (modernc.org/sqlite, CGO-free)
-- 39 Go source files, 47 tests across 7 packages, 32 dependencies
-- Post-cleanup: TUI (Bubble Tea), schedule/daemon, and stub commands were stripped
-- Danbooru and Konachan share Moebooru/Booru-style APIs — adapter code can share patterns
-- Zerochan is less documented but follows similar tag-based conventions
-- The GUI app will consume CLI output, so JSON contract stability matters
+- 55+ Go source files, 124 tests across 13 packages, 34 dependencies
+- 5 source adapters: Wallhaven, Reddit, Danbooru, Konachan, Zerochan (code complete, blocked by anti-bot)
+- Shared booru base package for Danbooru/Konachan pattern reuse
+- NDJSON event stream ready for GUI app consumption
+- Cookies.txt parser available for future source auth needs
 
 ## Constraints
 
@@ -75,8 +72,11 @@ Reliably fetch, deduplicate, and organize wallpapers from any supported source �
 | CLI stays headless | GUI is a separate app; CLI is the backend | ✓ Good |
 | CGO-free SQLite (modernc.org/sqlite) | Cross-compilation without C toolchain | ✓ Good |
 | Strip TUI and daemon | Don't belong in CLI tool | ✓ Good |
-| Source tags only (no AI this milestone) | Harvest what's free before investing in AI | — Pending |
-| JSON lines for event stream | Simple, pipe-friendly, no WebSocket complexity | — Pending |
+| Source tags only (no AI this milestone) | Harvest what's free before investing in AI | ✓ Good |
+| JSON lines for event stream | Simple, pipe-friendly, no WebSocket complexity | ✓ Good |
+| Defer Zerochan to GUI app | Anti-bot uses TLS fingerprinting, can't bypass from CLI | ✓ Good |
+| Shared booru package | Danbooru/Konachan share 80% code | ✓ Good |
+| retryablehttp for API calls | Built-in Retry-After parsing, rewindable bodies | ✓ Good |
 
 ## Evolution
 
@@ -96,4 +96,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-04 after milestone v1.3 initialization*
+*Last updated: 2026-04-05 after milestone v1.3 completion*

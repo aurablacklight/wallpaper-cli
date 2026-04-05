@@ -1,27 +1,26 @@
 # Project State: Wallpaper CLI Tool
 
-**Status:** Active — Milestone v1.3 roadmap created
-**Last Updated:** 2026-04-04
+**Status:** Idle — v1.3 complete, awaiting next milestone
+**Last Updated:** 2026-04-05
 
 ---
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-04)
+See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** Reliably fetch, deduplicate, and organize wallpapers from any supported source
-**Current focus:** Phase 4 — Foundation (v1.3 Sources, API & Downloads)
+**Current focus:** None — milestone complete
 
 ---
 
 ## Current Position
 
-Phase: 4 of 9 (Foundation)
-Plan: — of — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-04-04 — v1.3 roadmap created (phases 4-9 defined)
+Phase: Complete (9 of 9)
+Status: Idle
+Last activity: 2026-04-05 — Milestone v1.3 shipped
 
-Progress: [░░░░░░░░░░] 0% (v1.3)
+Progress: [██████████] 100% (v1.3)
 
 ---
 
@@ -29,7 +28,7 @@ Progress: [░░░░░░░░░░] 0% (v1.3)
 
 | Command | Description |
 |---------|-------------|
-| `fetch` | Download wallpapers from Wallhaven/Reddit with filtering |
+| `fetch` | Download wallpapers from Wallhaven/Reddit/Danbooru/Konachan with filtering |
 | `set` | Set desktop wallpaper (macOS/Linux/Windows) |
 | `list` | Query downloaded wallpapers from DB |
 | `export` | Export metadata as JSON |
@@ -39,54 +38,39 @@ Progress: [░░░░░░░░░░] 0% (v1.3)
 | `config` | Manage CLI configuration |
 | `stats` | Collection statistics |
 
-### Key Metrics (Post-Cleanup)
+### Key Metrics (v1.3)
 
-- **Go source files:** 39
-- **Dependencies:** 32 (direct + indirect)
-- **Tests:** 47 passing across 7 packages
-
----
-
-## Accumulated Context
-
-### Decisions
-
-- [v1.3]: JSON lines to stdout, human text to stderr — emitter abstraction required before any adapter work
-- [v1.3]: `source_tags` SQLite table must be created via migration before first tag insert — retrofitting is costly
-- [v1.3]: Danbooru before Konachan — 80% code overlap via shared booru base package
-- [v1.3]: Zerochan last — most divergent API (tag-in-URL-path, 2-call pattern, 404-as-empty, mandatory User-Agent)
-- [v1.3]: Parallel fetch (`--source all`) after all adapters stable — rate limiter isolation is a prerequisite
-- [v1.3]: 2 new deps approved: `cenkalti/backoff/v4`, `hashicorp/go-retryablehttp`
-
-### Research Flags for Planning
-
-- **Phase 7 (Zerochan):** Verify if `full` URL is available in list responses (may eliminate 2-call pattern)
-- **Phase 9 (Parallel fetch):** Resolve `--limit` semantics — per-source or total? Consider `--limit-total` flag
-- **Phase 6 (Konachan):** Empirically validate 0.5 req/s default; expose config knob for user tuning
-
-### Pending Todos
-
-None yet.
-
-### Blockers/Concerns
-
-None yet.
+- **Go source files:** 55+
+- **Dependencies:** 34 (direct + indirect)
+- **Tests:** 124 passing across 13 packages
+- **Sources:** 5 adapters (4 operational, Zerochan blocked by anti-bot)
+- **Tags harvested:** 380+ (Danbooru with categories, Konachan flat)
 
 ---
 
-## Performance Metrics
+## Completed Milestones
 
-**Velocity:**
-- Total plans completed: 0 (v1.3)
-- Average duration: —
-- Total execution time: —
+### M001: Core CLI (v1.0/1.1) — Complete
 
-*Updated after each plan completion*
+Core download pipeline: Wallhaven + Reddit sources, concurrent downloads, pHash deduplication, SQLite tracking, cross-platform builds, progress bars.
+
+### M002: Desktop Integration (v1.2) — Complete (Trimmed)
+
+Cross-platform `set` command, `list`/`export`/`stats` commands, collections (favorites/ratings/playlists). TUI and schedule features were stripped during cleanup.
+
+### M003: Sources, API & Downloads (v1.3) — Complete
+
+3 new source adapters (Danbooru, Konachan, Zerochan), source interface/registry, NDJSON event stream, tag harvesting with categories, resumable downloads, retry/backoff, parallel multi-source fetch. Zerochan code complete but deferred to GUI app due to TLS-fingerprint anti-bot.
 
 ---
 
-## Session Continuity
+## Next Steps
 
-Last session: 2026-04-04
-Stopped at: Roadmap created — ready to plan Phase 4
-Resume file: None
+No active milestone. Candidates for M004:
+- **GUI App** (High) — Separate app consuming CLI JSON API; handles Zerochan via browser engine, scheduling, browsing
+- **AI Auto-Tagging** (Low) — Source tags already harvested; add local model or API enrichment
+- **Multi-Monitor** (Medium) — Per-display wallpaper setting
+
+---
+
+*State maintained by GSD workflow*
