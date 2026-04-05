@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/user/wallpaper-cli/internal/model"
 )
 
 func newTestDB(t *testing.T) *DB {
@@ -22,7 +24,7 @@ func TestNewDB_CreatesSchema(t *testing.T) {
 	db := newTestDB(t)
 
 	// Verify all expected tables exist
-	tables := []string{"images", "config", "favorites", "ratings", "playlists", "playlist_items"}
+	tables := []string{"images", "config", "favorites", "ratings", "playlists", "playlist_items", "source_tags"}
 	for _, table := range tables {
 		var name string
 		err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&name)
@@ -220,5 +222,115 @@ func TestExecQueryQueryRow(t *testing.T) {
 	}
 	if len(keys) != 2 {
 		t.Errorf("got %d config rows, want 2", len(keys))
+	}
+}
+
+func TestSaveTags(t *testing.T) {
+	db := newTestDB(t)
+
+	tags := []model.Tag{
+		{Name: "landscape", Category: "general", CategoryID: 0, Source: "danbooru"},
+		{Name: "rem", Category: "character", CategoryID: 4, Source: "danbooru"},
+		{Name: "re:zero", Category: "copyright", CategoryID: 3, Source: "danbooru"},
+	}
+
+	if err := db.SaveTags(tags); err != nil {
+		t.Fatalf("SaveTags: %v", err)
+	}
+
+	got, err := db.GetTags("danbooru")
+	if err != nil {
+		t.Fatalf("GetTags: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("GetTags returned %d tags, want 3", len(got))
+	}
+}
+
+func TestSaveTags_Upsert(t *testing.T) {
+	db := newTestDB(t)
+
+	tags := []model.Tag{
+		{Name: "sky", Category: "", CategoryID: 0, Source: "wallhaven"},
+	}
+	db.SaveTags(tags)
+
+	// Upsert with new category
+	tags[0].Category = "general"
+	tags[0].CategoryID = 1
+	if err := db.SaveTags(tags); err != nil {
+		t.Fatalf("SaveTags upsert: %v", err)
+	}
+
+	got, _ := db.GetTags("wallhaven")
+	if len(got) != 1 {
+		t.Fatalf("expected 1 tag after upsert, got %d", len(got))
+	}
+	if got[0].Category != "general" {
+		t.Errorf("category after upsert = %q, want general", got[0].Category)
+	}
+}
+
+func TestSaveTags_Empty(t *testing.T) {
+	db := newTestDB(t)
+	if err := db.SaveTags(nil); err != nil {
+		t.Errorf("SaveTags(nil) should not error: %v", err)
+	}
+}
+
+func TestGetTags_AllSources(t *testing.T) {
+	db := newTestDB(t)
+
+	db.SaveTags([]model.Tag{
+		{Name: "sky", Source: "wallhaven"},
+		{Name: "landscape", Source: "danbooru"},
+	})
+
+	all, err := db.GetTags("")
+	if err != nil {
+		t.Fatalf("GetTags all: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("got %d tags, want 2", len(all))
+	}
+}
+
+func TestSearchTags(t *testing.T) {
+	db := newTestDB(t)
+
+	db.SaveTags([]model.Tag{
+		{Name: "landscape", Source: "danbooru"},
+		{Name: "lantern", Source: "danbooru"},
+		{Name: "sky", Source: "danbooru"},
+	})
+
+	got, err := db.SearchTags("lan")
+	if err != nil {
+		t.Fatalf("SearchTags: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("SearchTags('lan') returned %d results, want 2", len(got))
+	}
+}
+
+func TestSourceTagsIsolation(t *testing.T) {
+	db := newTestDB(t)
+
+	db.SaveTags([]model.Tag{
+		{Name: "sky", Source: "wallhaven"},
+		{Name: "sky", Source: "danbooru", Category: "general"},
+	})
+
+	wh, _ := db.GetTags("wallhaven")
+	dan, _ := db.GetTags("danbooru")
+
+	if len(wh) != 1 || len(dan) != 1 {
+		t.Fatalf("expected 1 tag per source, got wh=%d dan=%d", len(wh), len(dan))
+	}
+	if wh[0].Category != "" {
+		t.Errorf("wallhaven tag category = %q, want empty", wh[0].Category)
+	}
+	if dan[0].Category != "general" {
+		t.Errorf("danbooru tag category = %q, want general", dan[0].Category)
 	}
 }

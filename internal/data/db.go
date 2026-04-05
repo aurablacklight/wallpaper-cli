@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/user/wallpaper-cli/internal/model"
 	_ "modernc.org/sqlite"
 )
 
@@ -139,6 +140,19 @@ func (db *DB) createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_favorites_hash ON favorites(image_hash);
 	CREATE INDEX IF NOT EXISTS idx_ratings_hash ON ratings(image_hash);
 	CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist ON playlist_items(playlist_id);
+
+	CREATE TABLE IF NOT EXISTS source_tags (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL,
+		category TEXT DEFAULT '',
+		category_id INTEGER DEFAULT 0,
+		source TEXT NOT NULL,
+		UNIQUE(source, name)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_source_tags_name ON source_tags(name);
+	CREATE INDEX IF NOT EXISTS idx_source_tags_source ON source_tags(source);
+	CREATE INDEX IF NOT EXISTS idx_source_tags_category ON source_tags(category);
 	`
 
 	_, err := db.conn.Exec(schema)
@@ -316,4 +330,82 @@ func scanImage(row rowScanner) (*ImageRecord, error) {
 	}
 
 	return &img, nil
+}
+
+// SaveTags upserts a batch of tags into source_tags.
+func (db *DB) SaveTags(tags []model.Tag) error {
+	if len(tags) == 0 {
+		return nil
+	}
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	stmt, err := tx.Prepare(`INSERT INTO source_tags (name, category, category_id, source)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(source, name) DO UPDATE SET
+			category = excluded.category,
+			category_id = excluded.category_id`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("prepare: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, t := range tags {
+		if _, err := stmt.Exec(t.Name, t.Category, t.CategoryID, t.Source); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("exec tag %q: %w", t.Name, err)
+		}
+	}
+	return tx.Commit()
+}
+
+// GetTags returns all tags for a source, or all sources if source is empty.
+func (db *DB) GetTags(source string) ([]model.Tag, error) {
+	query := `SELECT name, category, category_id, source FROM source_tags`
+	var args []interface{}
+	if source != "" {
+		query += ` WHERE source = ?`
+		args = append(args, source)
+	}
+	query += ` ORDER BY name`
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []model.Tag
+	for rows.Next() {
+		var t model.Tag
+		if err := rows.Scan(&t.Name, &t.Category, &t.CategoryID, &t.Source); err != nil {
+			continue
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}
+
+// SearchTags finds tags matching a prefix query.
+func (db *DB) SearchTags(query string) ([]model.Tag, error) {
+	rows, err := db.conn.Query(
+		`SELECT name, category, category_id, source FROM source_tags WHERE name LIKE ? ORDER BY name LIMIT 50`,
+		query+"%",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []model.Tag
+	for rows.Next() {
+		var t model.Tag
+		if err := rows.Scan(&t.Name, &t.Category, &t.CategoryID, &t.Source); err != nil {
+			continue
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
 }

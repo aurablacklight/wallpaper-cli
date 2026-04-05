@@ -15,37 +15,41 @@ import (
 	"github.com/user/wallpaper-cli/internal/data"
 	"github.com/user/wallpaper-cli/internal/dedup"
 	"github.com/user/wallpaper-cli/internal/download"
-	"github.com/user/wallpaper-cli/internal/sources/reddit"
-	"github.com/user/wallpaper-cli/internal/sources/wallhaven"
+	"github.com/user/wallpaper-cli/internal/output"
+	"github.com/user/wallpaper-cli/internal/sources"
 	"github.com/user/wallpaper-cli/internal/utils"
 	"github.com/user/wallpaper-cli/internal/validate"
+
+	// Register source adapters
+	_ "github.com/user/wallpaper-cli/internal/sources/reddit"
+	_ "github.com/user/wallpaper-cli/internal/sources/wallhaven"
 )
 
 var (
 	// Basic flags
-	source       string
-	resolution   string
-	aspectRatio  string
-	tags         string
-	limit        int
-	output       string
-	organizeBy   string
-	format       string
-	dedupFlag    bool
-	concurrent   int
-	dryRun       bool
-	animeOnly    bool
+	source      string
+	resolution  string
+	aspectRatio string
+	tags        string
+	limit       int
+	outputDir   string
+	organizeBy  string
+	format      string
+	dedupFlag   bool
+	concurrent  int
+	dryRun      bool
+	animeOnly   bool
+	jsonOutput  bool
 
 	// Sorting flags (v1.1)
-	sortBy    string
-	timeRange string
-	latest    bool
-	popular   bool
-	favorites bool
+	sortBy     string
+	timeRange  string
+	latest     bool
+	popular    bool
+	favorites  bool
 	mostViewed bool
 )
 
-var validSources = []string{"wallhaven", "reddit", "all"}
 var validOrganizeBy = []string{"source", "tags", "date"}
 var validFormats = []string{"webp", "jpg", "png", "original"}
 var validSortBy = []string{"random", "top", "hot", "new", "favorites", "views"}
@@ -67,7 +71,10 @@ Examples:
   wallpaper-cli fetch --source reddit --hot --limit 10
 
   # Fetch most favorited of all time
-  wallpaper-cli fetch --favorites --all-time --limit 5`,
+  wallpaper-cli fetch --favorites --all-time --limit 5
+
+  # Fetch from all sources with JSON output
+  wallpaper-cli fetch --source all --json`,
 	RunE: runFetch,
 }
 
@@ -80,13 +87,14 @@ func init() {
 	fetchCmd.Flags().StringVar(&aspectRatio, "aspect-ratio", "", "Filter by aspect ratio (16:9, 21:9, 32:9)")
 	fetchCmd.Flags().StringVar(&tags, "tags", "", "Comma-separated tags to search")
 	fetchCmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of images to download")
-	fetchCmd.Flags().StringVar(&output, "output", "", "Output directory (default: ~/Pictures/wallpapers/)")
+	fetchCmd.Flags().StringVar(&outputDir, "output", "", "Output directory (default: ~/Pictures/wallpapers/)")
 	fetchCmd.Flags().StringVar(&organizeBy, "organize-by", "source", "Organization method (source, tags, date)")
 	fetchCmd.Flags().StringVar(&format, "format", "original", "Preferred format (webp, jpg, png, original)")
 	fetchCmd.Flags().BoolVar(&dedupFlag, "dedup", true, "Enable deduplication")
 	fetchCmd.Flags().IntVar(&concurrent, "concurrent", 5, "Number of concurrent downloads")
 	fetchCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be downloaded without downloading")
 	fetchCmd.Flags().BoolVar(&animeOnly, "anime", false, "Search for anime wallpapers only")
+	fetchCmd.Flags().BoolVar(&jsonOutput, "json", false, "Output structured JSON events to stdout")
 
 	// Sorting flags (v1.1)
 	fetchCmd.Flags().StringVar(&sortBy, "sort", "random", "Sort by: random, top, hot, new, favorites, views")
@@ -128,12 +136,12 @@ func runFetch(cmd *cobra.Command, args []string) error {
 	if resolution == "" {
 		resolution = cfg.DefaultResolution
 	}
-	if output == "" {
-		output = cfg.OutputDirectory
+	if outputDir == "" {
+		outputDir = cfg.OutputDirectory
 	}
 
 	// Expand output path
-	output, err = utils.ExpandPath(output)
+	outputDir, err = utils.ExpandPath(outputDir)
 	if err != nil {
 		return fmt.Errorf("invalid output path: %w", err)
 	}
@@ -146,6 +154,15 @@ func runFetch(cmd *cobra.Command, args []string) error {
 	sorting := getSorting(cmd)
 	timePeriod := getTimePeriod(cmd)
 
+	// Select emitter
+	var emitter output.Emitter
+	if jsonOutput {
+		emitter = output.NewJSONEmitter()
+	} else {
+		emitter = output.NewTextEmitter()
+	}
+	defer emitter.Close()
+
 	if dryRun {
 		fmt.Println("DRY RUN: Would fetch wallpapers with the following settings:")
 		fmt.Printf("  Source: %s\n", source)
@@ -155,7 +172,7 @@ func runFetch(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Sort: %s\n", sorting)
 		fmt.Printf("  Time Period: %s\n", timePeriod)
 		fmt.Printf("  Limit: %d\n", limit)
-		fmt.Printf("  Output: %s\n", output)
+		fmt.Printf("  Output: %s\n", outputDir)
 		fmt.Printf("  Organize by: %s\n", organizeBy)
 		fmt.Printf("  Format: %s\n", format)
 		fmt.Printf("  Deduplication: %v\n", dedupFlag)
@@ -163,7 +180,7 @@ func runFetch(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Open database for deduplication
+	// Open database
 	var db *data.DB
 	var checker *dedup.Checker
 	if dedupFlag {
@@ -176,21 +193,236 @@ func runFetch(cmd *cobra.Command, args []string) error {
 		checker = dedup.NewChecker(db, cfg.DedupThreshold)
 	}
 
-	// Execute fetch based on source
-	switch source {
-	case "wallhaven":
-		return fetchFromWallhaven(cfg, normalizedRes, normalizedRatio, output, db, checker, sorting, timePeriod)
-	case "reddit":
-		return fetchFromReddit(cfg, output, db, checker, sorting, timePeriod)
-	case "all":
-		return fetchFromAll(cfg, normalizedRes, normalizedRatio, output, db, checker, sorting, timePeriod)
+	// Build search params
+	params := &sources.SearchParams{
+		Tags:        tags,
+		Resolution:  normalizedRes,
+		AspectRatio: normalizedRatio,
+		Sorting:     sorting,
+		TimePeriod:  timePeriod,
+		Limit:       limit,
+		AnimeOnly:   animeOnly,
+	}
+
+	// Resolve which sources to query
+	sourceNames := resolveSourceNames(source)
+
+	for _, name := range sourceNames {
+		srcCfg := buildSourceConfig(cfg, name)
+		src, err := sources.Get(name, srcCfg)
+		if err != nil {
+			emitter.Emit(output.NewErrorEvent(name, fmt.Errorf("unknown source: %s", name)))
+			continue
+		}
+
+		// Emit search started
+		emitter.Emit(output.NewEvent("search_started", name, nil))
+
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		result, err := src.Search(ctx, params)
+		cancel()
+		if err != nil {
+			emitter.Emit(output.NewErrorEvent(name, err))
+			continue
+		}
+
+		emitter.Emit(output.NewEvent("search_complete", name, output.SearchCompleteData{Count: len(result.Wallpapers)}))
+
+		if len(result.Wallpapers) == 0 {
+			continue
+		}
+
+		// Save tags to database
+		if db != nil && len(result.Tags) > 0 {
+			_ = db.SaveTags(result.Tags)
+		}
+
+		// Download
+		if err := downloadResults(ctx, result, name, outputDir, db, checker, emitter); err != nil {
+			emitter.Emit(output.NewErrorEvent(name, err))
+		}
+	}
+
+	return nil
+}
+
+func resolveSourceNames(source string) []string {
+	if source == "all" {
+		return sources.List()
+	}
+	return []string{source}
+}
+
+func buildSourceConfig(cfg *config.Config, name string) map[string]string {
+	m := make(map[string]string)
+	if sc, ok := cfg.Sources[name]; ok {
+		if sc.APIKey != "" {
+			m["api_key"] = sc.APIKey
+		}
+		if len(sc.Subreddits) > 0 {
+			m["subreddits"] = strings.Join(sc.Subreddits, ",")
+		}
+	}
+	return m
+}
+
+func downloadResults(ctx context.Context, result *sources.SearchResult, sourceName, outputPath string, db *data.DB, checker *dedup.Checker, emitter output.Emitter) error {
+	jobs := make([]download.DownloadJob, 0, len(result.Wallpapers))
+	for i, w := range result.Wallpapers {
+		filename := generateFilename(w, i+1)
+		subdir := getSubdir(sourceName, w, organizeBy)
+		fullPath := filepath.Join(outputPath, subdir, filename)
+
+		jobs = append(jobs, download.DownloadJob{
+			URL:      w.URL,
+			Filename: fullPath,
+			Index:    i,
+			Total:    len(result.Wallpapers),
+		})
+	}
+
+	if len(jobs) == 0 {
+		return nil
+	}
+
+	emitter.Emit(output.NewEvent("download_started", sourceName, output.DownloadStartedData{Total: len(jobs)}))
+
+	opts := &download.Options{
+		Concurrency: concurrent,
+		OutputDir:   outputPath,
+		Timeout:     60 * time.Second,
+		EnableDedup: dedupFlag,
+	}
+
+	dlCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	var results []download.DownloadResult
+	if jsonOutput {
+		// In JSON mode, use silent progress (no progress bar on stderr)
+		manager := download.NewManager(opts, nil, checker)
+		results = manager.DownloadBatch(dlCtx, jobs)
+
+		completed, skipped, errors := manager.Stats()
+		emitter.Emit(output.NewEvent("download_complete", sourceName, output.DownloadCompleteData{
+			Total:     len(results),
+			Completed: completed,
+			Skipped:   skipped,
+			Errors:    errors,
+		}))
+	} else {
+		// In text mode, use progress bar
+		bar := progressbar.NewOptions(len(jobs),
+			progressbar.OptionSetDescription("Downloading"),
+			progressbar.OptionSetWriter(os.Stderr),
+			progressbar.OptionShowCount(),
+			progressbar.OptionShowBytes(true),
+			progressbar.OptionSetWidth(40),
+			progressbar.OptionThrottle(100*time.Millisecond),
+			progressbar.OptionSetTheme(progressbar.Theme{
+				Saucer:        "█",
+				SaucerHead:    "█",
+				SaucerPadding: "░",
+				BarStart:      "|",
+				BarEnd:        "|",
+			}),
+		)
+		manager := download.NewManagerWithBar(opts, bar, checker)
+		results = manager.DownloadBatch(dlCtx, jobs)
+		bar.Finish()
+
+		completed, skipped, errors := manager.Stats()
+		emitter.Emit(output.NewEvent("download_complete", sourceName, output.DownloadCompleteData{
+			Total:     len(results),
+			Completed: completed,
+			Skipped:   skipped,
+			Errors:    errors,
+		}))
+	}
+
+	// Save to database
+	if db != nil {
+		for i, res := range results {
+			if res.Error != nil || res.Skipped {
+				continue
+			}
+
+			hash, err := dedup.ComputeHash(res.Path)
+			if err != nil {
+				continue
+			}
+			info, err := os.Stat(res.Path)
+			if err != nil {
+				continue
+			}
+
+			w := result.Wallpapers[i]
+			record := &data.ImageRecord{
+				Hash:         hash,
+				Source:       sourceName,
+				SourceID:     w.SourceID,
+				URL:          res.URL,
+				LocalPath:    res.Path,
+				Resolution:   w.Resolution,
+				AspectRatio:  w.AspectRatio,
+				DownloadedAt: time.Now(),
+				FileSize:     info.Size(),
+			}
+			_ = db.SaveImage(record)
+
+			// Save source URL as extended attribute
+			switch sourceName {
+			case "wallhaven":
+				_ = utils.SetWallhavenURL(res.Path, fmt.Sprintf("https://wallhaven.cc/w/%s", w.SourceID))
+			case "reddit":
+				// Reddit permalink would need to be in Extra data; skip for now
+			}
+		}
+	}
+
+	return nil
+}
+
+func generateFilename(w sources.ResultWallpaper, rank int) string {
+	ext := "." + w.Format
+	if ext == "." {
+		ext = ".jpg"
+	}
+	if format != "" && format != "original" {
+		ext = "." + format
+	}
+
+	title := sanitizeFilename(w.Title)
+	if len(title) > 30 {
+		title = title[:30]
+	}
+
+	if title != "" && w.Resolution != "" {
+		return fmt.Sprintf("%02d_%s_%s_%s%s", rank, w.SourceID, w.Resolution, title, ext)
+	}
+	if w.Resolution != "" && w.Resolution != "unknown" {
+		return fmt.Sprintf("%02d_%s_%s%s", rank, w.SourceID, w.Resolution, ext)
+	}
+	return fmt.Sprintf("%02d_%s%s", rank, w.SourceID, ext)
+}
+
+func getSubdir(sourceName string, w sources.ResultWallpaper, organize string) string {
+	switch organize {
+	case "source":
+		return sourceName
+	case "date":
+		return time.Now().Format("2006/01")
+	case "tags":
+		if len(w.Tags) > 0 {
+			return sanitizeFilename(w.Tags[0])
+		}
+		return "unsorted"
 	default:
-		return fmt.Errorf("unknown source: %s", source)
+		return sourceName
 	}
 }
 
 func getSorting(cmd *cobra.Command) string {
-	// Check shorthand flags first
 	if latest {
 		return "latest"
 	}
@@ -210,7 +442,6 @@ func getSorting(cmd *cobra.Command) string {
 }
 
 func getTimePeriod(cmd *cobra.Command) string {
-	// Check shorthand time flags
 	if cmd.Flags().Lookup("day").Value.String() == "true" {
 		return "1d"
 	}
@@ -232,467 +463,6 @@ func getTimePeriod(cmd *cobra.Command) string {
 	return ""
 }
 
-func fetchFromWallhaven(cfg *config.Config, resolution, ratio, output string, db *data.DB, checker *dedup.Checker, sorting, timePeriod string) error {
-	fmt.Printf("Fetching from Wallhaven (sort: %s)...\n", sorting)
-
-	client := wallhaven.NewClient()
-
-	// Build search query
-	builder := wallhaven.NewSearchBuilder()
-	if animeOnly {
-		builder.WithAnimeOnly()
-	}
-	if tags != "" {
-		builder.WithQuery(wallhaven.ParseTags(tags))
-	}
-	if resolution != "" {
-		builder.WithResolution(resolution)
-	}
-	if ratio != "" {
-		builder.WithAspectRatio(ratio)
-	}
-
-	// Apply sorting
-	switch sorting {
-	case "top", "popular":
-		builder.WithSorting("toplist")
-		if timePeriod != "" {
-			builder.WithTopRange(mapTimeToWallhavenRange(timePeriod))
-		}
-	case "favorites":
-		builder.WithSorting("favorites")
-	case "views":
-		builder.WithSorting("views")
-	case "latest", "new":
-		builder.WithSorting("date_added")
-		builder.WithOrder("desc")
-	case "random":
-		builder.WithRandom()
-	default:
-		builder.WithRandom()
-	}
-
-	opts := builder.Build()
-
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	// Fetch wallpapers with pagination
-	wallpapers, err := client.PaginatedSearch(ctx, opts, limit)
-	if err != nil {
-		return fmt.Errorf("search failed: %w", err)
-	}
-
-	fmt.Printf("Found %d wallpapers\n", len(wallpapers))
-
-	if len(wallpapers) == 0 {
-		fmt.Println("No wallpapers found matching criteria.")
-		return nil
-	}
-
-	return downloadWallpapers(wallpapers, output, db, checker, "wallhaven")
-}
-
-func fetchFromReddit(cfg *config.Config, output string, db *data.DB, checker *dedup.Checker, sorting, timePeriod string) error {
-	fmt.Printf("Fetching from Reddit (sort: %s)...\n", sorting)
-
-	client := reddit.NewClient()
-
-	// Determine sort option
-	sortOpt := reddit.SortHot
-	switch sorting {
-	case "top", "popular":
-		sortOpt = reddit.SortTop
-	case "new", "latest":
-		sortOpt = reddit.SortNew
-	case "hot":
-		sortOpt = reddit.SortHot
-	}
-
-	// Get subreddits from config
-	subreddits := cfg.Sources["reddit"].Subreddits
-	if len(subreddits) == 0 {
-		subreddits = []string{"Animewallpaper"}
-	}
-
-	var allPosts []reddit.Wallpaper
-
-	for _, sub := range subreddits {
-		opts := &reddit.SearchOptions{
-			Subreddit: sub,
-			Sort:      sortOpt,
-			Time:      reddit.TimePeriod(mapTimeToRedditRange(timePeriod)),
-			Limit:     limit,
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		posts, err := client.Search(ctx, opts)
-		cancel()
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Reddit search failed for r/%s: %v\n", sub, err)
-			continue
-		}
-
-		wallpapers := reddit.ToPosts(posts)
-		allPosts = append(allPosts, wallpapers...)
-	}
-
-	// Limit results
-	if len(allPosts) > limit {
-		allPosts = allPosts[:limit]
-	}
-
-	fmt.Printf("Found %d wallpapers from Reddit\n", len(allPosts))
-
-	if len(allPosts) == 0 {
-		fmt.Println("No wallpapers found from Reddit.")
-		return nil
-	}
-
-	// Convert to common format for download
-	return downloadRedditPosts(allPosts, output, db, checker)
-}
-
-func fetchFromAll(cfg *config.Config, resolution, ratio, output string, db *data.DB, checker *dedup.Checker, sorting, timePeriod string) error {
-	// Fetch from both sources
-	fmt.Println("Fetching from all sources...")
-
-	// Wallhaven first
-	fmt.Println("\n[Wallhaven]")
-	if err := fetchFromWallhaven(cfg, resolution, ratio, output, db, checker, sorting, timePeriod); err != nil {
-		fmt.Fprintf(os.Stderr, "Wallhaven error: %v\n", err)
-	}
-
-	// Then Reddit
-	fmt.Println("\n[Reddit]")
-	if err := fetchFromReddit(cfg, output, db, checker, sorting, timePeriod); err != nil {
-		fmt.Fprintf(os.Stderr, "Reddit error: %v\n", err)
-	}
-
-	return nil
-}
-
-func mapTimeToWallhavenRange(timeRange string) string {
-	switch timeRange {
-	case "day", "1d":
-		return "1d"
-	case "week", "7d":
-		return "1w"
-	case "month", "30d":
-		return "1M"
-	case "year", "1y":
-		return "1y"
-	case "all":
-		return "1y"
-	default:
-		return "1M"
-	}
-}
-
-func mapTimeToRedditRange(timeRange string) string {
-	switch timeRange {
-	case "day", "1d":
-		return "day"
-	case "week", "7d":
-		return "week"
-	case "month", "30d":
-		return "month"
-	case "year", "1y":
-		return "year"
-	case "all":
-		return "all"
-	default:
-		return "week"
-	}
-}
-
-func downloadWallpapers(wallpapers []wallhaven.Wallpaper, output string, db *data.DB, checker *dedup.Checker, sourceName string) error {
-	// Create download jobs
-	jobs := make([]download.DownloadJob, 0, len(wallpapers))
-	for i, w := range wallpapers {
-		filename := generateWallhavenFilename(w, i+1)  // +1 for 1-based ranking
-
-		subdir := ""
-		switch organizeBy {
-		case "source":
-			subdir = sourceName
-		case "date":
-			subdir = time.Now().Format("2006/01")
-		case "tags":
-			if len(w.Tags) > 0 {
-				subdir = sanitizeFilename(w.Tags[0].Name)
-			} else {
-				subdir = "unsorted"
-			}
-		}
-
-		fullPath := filepath.Join(output, subdir, filename)
-
-		jobs = append(jobs, download.DownloadJob{
-			URL:      w.Path,
-			Filename: fullPath,
-			Index:    i,
-			Total:    len(wallpapers),
-		})
-	}
-
-	// Download with progress bar
-	fmt.Printf("\nDownloading %d wallpapers...\n", len(jobs))
-
-	opts := &download.Options{
-		Concurrency: concurrent,
-		OutputDir:   output,
-		Timeout:     60 * time.Second,
-		EnableDedup: dedupFlag,
-	}
-
-	// Create progress bar
-	bar := progressbar.NewOptions(len(jobs),
-		progressbar.OptionSetDescription("Downloading"),
-		progressbar.OptionSetWriter(os.Stderr),
-		progressbar.OptionShowCount(),
-		progressbar.OptionShowBytes(true),
-		progressbar.OptionSetWidth(40),
-		progressbar.OptionThrottle(100*time.Millisecond),
-		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "█",
-			SaucerHead:    "█",
-			SaucerPadding: "░",
-			BarStart:      "|",
-			BarEnd:        "|",
-		}),
-	)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	manager := download.NewManagerWithBar(opts, bar, checker)
-	results := manager.DownloadBatch(ctx, jobs)
-
-	// Force finish progress bar
-	bar.Finish()
-
-	// Save to database and metadata
-	for i, result := range results {
-		if result.Error != nil || result.Skipped {
-			continue
-		}
-
-		// Save to database (if enabled)
-		if db != nil {
-			hash, err := dedup.ComputeHash(result.Path)
-			if err != nil {
-				continue
-			}
-
-			info, err := os.Stat(result.Path)
-			if err != nil {
-				continue
-			}
-
-			record := &data.ImageRecord{
-				Hash:         hash,
-				Source:       sourceName,
-				SourceID:     wallpapers[i].ID,
-				URL:          result.URL,
-				LocalPath:    result.Path,
-				Resolution:   wallpapers[i].Resolution,
-				AspectRatio:  wallpapers[i].Ratio,
-				DownloadedAt: time.Now(),
-				FileSize:     info.Size(),
-			}
-
-			db.SaveImage(record)
-		}
-
-		// Save Wallhaven source URL as file metadata (always)
-		wallhavenURL := fmt.Sprintf("https://wallhaven.cc/w/%s", wallpapers[i].ID)
-		_ = utils.SetWallhavenURL(result.Path, wallhavenURL)
-	}
-
-	// Print summary
-	completed, skipped, errors := manager.Stats()
-	fmt.Fprintf(os.Stderr, "\n✓ Downloaded: %d/%d", completed, len(results))
-	if skipped > 0 {
-		fmt.Fprintf(os.Stderr, " | Skipped: %d", skipped)
-	}
-	if errors > 0 {
-		fmt.Fprintf(os.Stderr, " | Failed: %d", errors)
-	}
-	fmt.Fprintln(os.Stderr)
-
-	return nil
-}
-
-func downloadRedditPosts(posts []reddit.Wallpaper, output string, db *data.DB, checker *dedup.Checker) error {
-	// Create download jobs
-	jobs := make([]download.DownloadJob, 0, len(posts))
-	for i, p := range posts {
-		filename := generateRedditFilename(p, i+1)  // +1 for 1-based ranking
-
-		subdir := ""
-		switch organizeBy {
-		case "source":
-			subdir = "reddit"
-		case "date":
-			subdir = time.Now().Format("2006/01")
-		case "tags":
-			subdir = "unsorted"
-		}
-
-		fullPath := filepath.Join(output, subdir, filename)
-
-		jobs = append(jobs, download.DownloadJob{
-			URL:      p.URL,
-			Filename: fullPath,
-			Index:    i,
-			Total:    len(posts),
-		})
-	}
-
-	if len(jobs) == 0 {
-		return nil
-	}
-
-	// Download with progress bar (Reddit)
-	fmt.Fprintf(os.Stderr, "\nDownloading %d wallpapers from Reddit...\n\n", len(jobs))
-
-	opts := &download.Options{
-		Concurrency: concurrent,
-		OutputDir:   output,
-		Timeout:     60 * time.Second,
-		EnableDedup: dedupFlag,
-	}
-
-	// Create progress bar
-	bar := progressbar.NewOptions(len(jobs),
-		progressbar.OptionSetDescription("Downloading"),
-		progressbar.OptionSetWriter(os.Stderr),
-		progressbar.OptionShowCount(),
-		progressbar.OptionShowBytes(true),
-		progressbar.OptionSetWidth(50),
-		progressbar.OptionSetRenderBlankState(true),
-		progressbar.OptionThrottle(65*time.Millisecond),
-		progressbar.OptionShowElapsedTimeOnFinish(),
-		progressbar.OptionClearOnFinish(),
-		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "█",
-			SaucerHead:    "█",
-			SaucerPadding: "░",
-			BarStart:      "|",
-			BarEnd:        "|",
-		}),
-	)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	manager := download.NewManagerWithBar(opts, bar, checker)
-	results := manager.DownloadBatch(ctx, jobs)
-
-	// Force finish progress bar
-	bar.Finish()
-
-	// Save to database and metadata
-	for i, result := range results {
-		if result.Error != nil || result.Skipped {
-			continue
-		}
-
-		// Save to database (if enabled)
-		if db != nil {
-			hash, err := dedup.ComputeHash(result.Path)
-			if err != nil {
-				continue
-			}
-
-			info, err := os.Stat(result.Path)
-			if err != nil {
-				continue
-			}
-
-			record := &data.ImageRecord{
-				Hash:         hash,
-				Source:       "reddit",
-				SourceID:     posts[i].ID,
-				URL:          result.URL,
-				LocalPath:    result.Path,
-				Resolution:   posts[i].Resolution,
-				AspectRatio:  "",
-				DownloadedAt: time.Now(),
-				FileSize:     info.Size(),
-			}
-
-			db.SaveImage(record)
-		}
-
-		// Save Reddit permalink as file metadata (always, if available)
-		if posts[i].Permalink != "" {
-			err := utils.SetRedditURL(result.Path, posts[i].Permalink)
-			if err != nil {
-				// Silently ignore errors - metadata is optional
-				_ = err
-			}
-		}
-	}
-
-	// Print summary
-	completed, skipped, errors := manager.Stats()
-	fmt.Fprintf(os.Stderr, "\n✓ Downloaded: %d/%d", completed, len(results))
-	if skipped > 0 {
-		fmt.Fprintf(os.Stderr, " | Skipped: %d", skipped)
-	}
-	if errors > 0 {
-		fmt.Fprintf(os.Stderr, " | Failed: %d", errors)
-	}
-	fmt.Fprintln(os.Stderr)
-
-	return nil
-}
-
-func generateWallhavenFilename(w wallhaven.Wallpaper, rank int) string {
-	ext := ".jpg"
-	if strings.Contains(w.Path, ".png") {
-		ext = ".png"
-	} else if strings.Contains(w.Path, ".webp") {
-		ext = ".webp"
-	}
-
-	if format != "" && format != "original" {
-		ext = "." + format
-	}
-
-	return fmt.Sprintf("%02d_%s_%s%s", rank, w.ID, w.Resolution, ext)
-}
-
-func generateRedditFilename(p reddit.Wallpaper, rank int) string {
-	ext := ".jpg"
-	if strings.Contains(p.URL, ".png") {
-		ext = ".png"
-	} else if strings.Contains(p.URL, ".webp") {
-		ext = ".webp"
-	}
-
-	if format != "" && format != "original" {
-		ext = "." + format
-	}
-
-	// Use title or ID in filename
-	title := sanitizeFilename(p.Title)
-	if len(title) > 30 {
-		title = title[:30]
-	}
-
-	// Include resolution if available
-	if p.Resolution != "" && p.Resolution != "unknown" {
-		return fmt.Sprintf("%02d_%s_%s_%s%s", rank, p.ID, p.Resolution, title, ext)
-	}
-
-	return fmt.Sprintf("%02d_%s_%s%s", rank, p.ID, title, ext)
-}
-
 func sanitizeFilename(name string) string {
 	replacer := strings.NewReplacer(
 		"/", "-",
@@ -709,16 +479,9 @@ func sanitizeFilename(name string) string {
 }
 
 func validateInputs() error {
-	// Validate source
-	valid := false
-	for _, s := range validSources {
-		if source == s {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return fmt.Errorf("invalid source: %s (expected: wallhaven, reddit, all)", source)
+	// Validate source - check registry or "all"
+	if source != "all" && !sources.IsRegistered(source) {
+		return fmt.Errorf("invalid source: %s (registered: %s)", source, strings.Join(sources.List(), ", "))
 	}
 
 	// Validate resolution
@@ -732,7 +495,7 @@ func validateInputs() error {
 	}
 
 	// Validate organize-by
-	valid = false
+	valid := false
 	for _, o := range validOrganizeBy {
 		if organizeBy == o {
 			valid = true
