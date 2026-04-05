@@ -22,6 +22,7 @@ import (
 
 	// Register source adapters
 	_ "github.com/user/wallpaper-cli/internal/sources/danbooru"
+	_ "github.com/user/wallpaper-cli/internal/sources/konachan"
 	_ "github.com/user/wallpaper-cli/internal/sources/reddit"
 	_ "github.com/user/wallpaper-cli/internal/sources/wallhaven"
 )
